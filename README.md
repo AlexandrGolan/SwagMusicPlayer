@@ -7,7 +7,7 @@ make clean # remove files (From /usr/local/bin too)
 make depence-info # displays a list of installation dependencies
 make # make binary file in working directory
 ```
-#To fully experience the player's features, follow these steps:
+# To fully experience the player's features, follow these steps:
 
 ### 1. Create a folder
 ### 2. Place audio files in WAV or MP3 formats there
