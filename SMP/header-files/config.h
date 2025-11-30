@@ -1,0 +1,18 @@
+#ifndef CONFIG_H
+#define CONFIG_H
+
+#define WIDTH 168
+#define HEIGHT 39
+#define LEFT_WIDTH 84
+#define RIGHT_WIDTH 84
+#define IMAGE_WIDTH 80
+#define IMAGE_HEIGHT 25
+#define IMAGE_X 6
+#define IMAGE_Y 6
+#define ALSA_BUFFER_SIZE 4096
+#define ALSA_PERIOD_SIZE 1024
+#define SAMPLE_RATE 44100
+#define CHANNELS 2
+#define FORMAT SND_PCM_FORMAT_S16_LE
+
+#endif
