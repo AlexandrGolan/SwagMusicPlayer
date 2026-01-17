@@ -41,7 +41,7 @@ deps-info:
 	@echo ""
 	@echo "Install on Arch/fedora:"
 	@echo "  sudo pacman -S alsa-lib libsndfile mpg123 tiv"
-	@echo "sudo dnf install alsa-lib alsa-lib-devel libsndfile libsndfile-devel mpg123 mpg123-devel"
+	@echo "  sudo dnf install alsa-lib alsa-lib-devel libsndfile libsndfile-devel mpg123 mpg123-devel"
     @echo ""
 	@echo "Install on Debian/Ubuntu:"
 	@echo "  sudo apt-get install libasound2-dev libsndfile1-dev libmpg123-dev tiv"
