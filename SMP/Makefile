@@ -39,12 +39,13 @@ deps-info:
 	@echo "  libmpg123:   libmpg123-dev (Debian/Ubuntu) or mpg123 (Arch)"
 	@echo "  tiv:         tiv (for album art display)"
 	@echo ""
-	@echo "Install on Arch:"
+	@echo "Install on Arch/fedora:"
 	@echo "  sudo pacman -S alsa-lib libsndfile mpg123 tiv"
-	@echo ""
+	@echo "sudo dnf install alsa-lib alsa-lib-devel libsndfile libsndfile-devel mpg123 mpg123-devel"
+    @echo ""
 	@echo "Install on Debian/Ubuntu:"
 	@echo "  sudo apt-get install libasound2-dev libsndfile1-dev libmpg123-dev tiv"
-
+    
 depence-info: deps-info
 	@echo "(Note: 'depence-info' is an alias for 'deps-info')"
 
