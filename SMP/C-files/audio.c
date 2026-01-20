@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <alloca.h>  // Добавьте эту строку
+#include <alloca.h>  
 
 int init_audio_system() {
     int err;
