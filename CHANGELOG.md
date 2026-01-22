@@ -1,3 +1,15 @@
+commit 2f18e380b837b939d43a9d1d108f6a079010cf0d
+Author: Alexeev Bronislav <alexeev.dev@mail.ru>
+Date:   Thu Jan 22 18:11:53 2026 +0700
+
+    update codestyle
+
+commit db075034276c4dcf82194201a6ec8b5719e4170d
+Author: Alexeev Bronislav <alexeev.dev@mail.ru>
+Date:   Thu Jan 22 18:10:55 2026 +0700
+
+    update structure, add shell.nix, update makefile
+
 commit 091d1da97d4a2c31c18404642c33b5483f0b0761
 Author: AlexandrGolan <69524932+AlexandrGolan@users.noreply.github.com>
 Date:   Tue Jan 20 22:19:24 2026 +0300
