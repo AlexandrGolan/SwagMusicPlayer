@@ -1,3 +1,15 @@
+commit 65967aabece3165553bfbaa637518623de549b51
+Author: Alexeev Bronislav <alexeev.dev@mail.ru>
+Date:   Thu Jan 22 20:52:03 2026 +0700
+
+    update UI
+
+commit 425be8d52c8a2e777d511ffc2b130abef5db2989
+Author: Alexeev Bronislav <alexeev.dev@mail.ru>
+Date:   Thu Jan 22 20:48:54 2026 +0700
+
+    improve navigation, add volume bar, improve UI, improve cover view
+
 commit d7703b791694f6e1172bf768adf39fac16674478
 Author: Alexeev Bronislav <alexeev.dev@mail.ru>
 Date:   Thu Jan 22 18:23:42 2026 +0700

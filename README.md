@@ -46,7 +46,7 @@ music/
 ```
 
 ### An example of what the interface looks like
-<img width="1695" height="898" alt="Снимок экрана от 2025-11-30 07-55-00" src="https://github.com/user-attachments/assets/a4dc45be-c616-4788-8ae6-71d689b8206f" />
+<img width="1695" height="898" alt="Снимок экрана от 2025-11-30 07-55-00" src="https://habrastorage.org/webt/ok/xe/fw/okxefwcb3muvhzlgbkep2d7wanc.png" />
 
 ---
 
