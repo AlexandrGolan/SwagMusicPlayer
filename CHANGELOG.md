@@ -1,3 +1,15 @@
+commit d7703b791694f6e1172bf768adf39fac16674478
+Author: Alexeev Bronislav <alexeev.dev@mail.ru>
+Date:   Thu Jan 22 18:23:42 2026 +0700
+
+    update .gitignore
+
+commit 6ff34f9cfe90b678171ad734549c222dd0852993
+Author: Alexeev Bronislav <alexeev.dev@mail.ru>
+Date:   Thu Jan 22 18:22:56 2026 +0700
+
+    update structure (up to root), update shell.nix and fix 32bit libs support
+
 commit 2f18e380b837b939d43a9d1d108f6a079010cf0d
 Author: Alexeev Bronislav <alexeev.dev@mail.ru>
 Date:   Thu Jan 22 18:11:53 2026 +0700

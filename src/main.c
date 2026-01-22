@@ -1,4 +1,5 @@
 #include <pthread.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -26,12 +27,23 @@ pthread_mutex_t audio_mutex = PTHREAD_MUTEX_INITIALIZER;
 snd_pcm_t* pcm_handle = NULL;
 mpg123_handle* mp3_handle = NULL;
 struct termios original_termios;
+volatile sig_atomic_t resize_flag = 0;
+
+void handle_resize(int sig) {
+    (void)sig;
+    resize_flag = 1;
+}
 
 void* audio_thread_function(void* arg) {
     (void)arg;
     time_t last_update_time = time(NULL);
 
     while (audio_thread_running) {
+        if (resize_flag) {
+            resize_flag = 0;
+            draw_interface();
+        }
+
         if (playlist.count == 0) {
             msleep(100);
             continue;
@@ -77,6 +89,8 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    signal(SIGWINCH, handle_resize);
+
     if (pthread_mutex_init(&draw_mutex, NULL) != 0 || pthread_mutex_init(&audio_mutex, NULL) != 0) {
         printf("Mutex init failed\n");
         return 1;
@@ -84,6 +98,17 @@ int main(int argc, char* argv[]) {
 
     strncpy(music_directory, argv[1], sizeof(music_directory) - 1);
     music_directory[sizeof(music_directory) - 1] = '\0';
+
+    update_terminal_size();
+
+    if (TERM_WIDTH < MIN_WIDTH || TERM_HEIGHT < MIN_HEIGHT) {
+        printf("Terminal too small. Minimum: %dx%d, Current: %dx%d\n",
+               MIN_WIDTH,
+               MIN_HEIGHT,
+               TERM_WIDTH,
+               TERM_HEIGHT);
+        return 1;
+    }
 
     if (!check_tiv_available()) {
         printf("Warning: tiv not found. Install with: sudo pacman -S tiv\n");
@@ -102,15 +127,18 @@ int main(int argc, char* argv[]) {
 
     if (playlist.count == 0) {
         printf("No tracks loaded. Exiting.\n");
+        disable_raw_mode();
         return 1;
     }
 
     if (pthread_create(&audio_thread, NULL, audio_thread_function, NULL) != 0) {
         printf("Failed to create audio thread\n");
+        disable_raw_mode();
         return 1;
     }
 
-    printf("SMP Media Player started. Loaded %d tracks.\n", playlist.count);
+    printf("NGSMP Media Player started. Loaded %d tracks.\n", playlist.count);
+    printf("Volume: %d%%\n", current_volume);
     printf("Press any key to continue...");
     getchar();
 
@@ -118,6 +146,12 @@ int main(int argc, char* argv[]) {
 
     while (audio_thread_running) {
         handle_input();
+
+        if (resize_flag) {
+            resize_flag = 0;
+            draw_interface();
+        }
+
         msleep(50);
     }
 
@@ -138,7 +172,7 @@ int main(int argc, char* argv[]) {
     pthread_mutex_destroy(&audio_mutex);
 
     clear_screen();
-    printf("SMP Media Player closed. Thank you for using!\n");
+    printf("NGSMP Media Player closed. Thank you for using!\n");
 
     return 0;
 }

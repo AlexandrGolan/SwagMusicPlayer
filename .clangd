@@ -1,17 +1,5 @@
 CompileFlags:
   Add:
-    - "-xc"
-    - "-std=c11"
     - "-I./include/"
     - "-I/include/"
-    - "-I./source/"
-    - "-I/source/"
-    - "-I../../source/"
-    - "-nostdlib"
-    - "-nostdinc"
-    - "-fno-builtin"
-    - "-m32"
-    - "-fno-stack-protector"
-    - "-nostartfiles"
-    - "-nodefaultlibs"
   CompilationDatabase: build/dev

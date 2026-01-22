@@ -1,6 +1,7 @@
 #ifndef PLAYER_H
 #define PLAYER_H
 
+#define _POSIX_C_SOURCE 200112L
 #include <alloca.h>
 #include <alsa/asoundlib.h>
 #include <dirent.h>
@@ -10,15 +11,23 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
+#include <taglib/tag_c.h>
 #include <termios.h>
 #include <time.h>
 #include <unistd.h>
 
-#define WIDTH 168
-#define HEIGHT 39
-#define LEFT_WIDTH 84
-#define IMAGE_X 6
-#define IMAGE_Y 6
+extern int TERM_WIDTH;
+extern int TERM_HEIGHT;
+extern int LEFT_WIDTH;
+extern int RIGHT_WIDTH;
+extern int IMAGE_WIDTH;
+extern int IMAGE_HEIGHT;
+extern int IMAGE_X;
+extern int IMAGE_Y;
+extern int current_volume;
+extern int playlist_offset;
+
 #define ALSA_BUFFER_SIZE 4096
 #define ALSA_PERIOD_SIZE 1024
 #define SAMPLE_RATE 44100
@@ -63,5 +72,8 @@ void enable_raw_mode();
 void disable_raw_mode();
 void clear_screen();
 void set_cursor_position(int row, int col);
+void update_terminal_size();
+void change_volume(int delta);
+void set_alsa_volume();
 
 #endif

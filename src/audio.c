@@ -71,7 +71,36 @@ int init_audio_system() {
         return -1;
     }
 
+    set_alsa_volume();
+
     return 0;
+}
+
+void set_alsa_volume() {
+    if (pcm_handle == NULL) {
+        return;
+    }
+
+    snd_pcm_sw_params_t* sw_params;
+    snd_pcm_sw_params_alloca(&sw_params);
+
+    int err = snd_pcm_sw_params_current(pcm_handle, sw_params);
+    if (err < 0) {
+        return;
+    }
+
+    long min, max;
+    snd_pcm_sw_params_get_avail_min(sw_params, &min);
+
+    err = snd_pcm_sw_params_set_start_threshold(pcm_handle, sw_params, ALSA_BUFFER_SIZE);
+    if (err < 0) {
+        return;
+    }
+
+    err = snd_pcm_sw_params(pcm_handle, sw_params);
+    if (err < 0) {
+        return;
+    }
 }
 
 void cleanup_audio_system() {
@@ -104,6 +133,27 @@ void list_audio_devices() {
             printf("  ✗ %s (%s)\n", devices[i], snd_strerror(err));
         }
     }
+}
+
+int apply_volume_to_buffer(short* buffer, int frames, int channels) {
+    if (current_volume == MAX_VOLUME) {
+        return 0;
+    }
+
+    float volume_factor = (float)current_volume / MAX_VOLUME;
+
+    for (int i = 0; i < frames * channels; i++) {
+        int sample = (int)(buffer[i] * volume_factor);
+        if (sample > 32767) {
+            sample = 32767;
+        }
+        if (sample < -32768) {
+            sample = -32768;
+        }
+        buffer[i] = (short)sample;
+    }
+
+    return 0;
 }
 
 int play_wav_file(const char* filename) {
@@ -144,6 +194,8 @@ int play_wav_file(const char* filename) {
         if (frames_read <= 0) {
             break;
         }
+
+        apply_volume_to_buffer(buffer, frames_read, CHANNELS);
 
         int err = snd_pcm_writei(pcm_handle, buffer, frames_read);
         if (err == -EPIPE) {
@@ -218,7 +270,10 @@ int play_mp3_file(const char* filename) {
         }
 
         if (done > 0) {
-            int pcm_err = snd_pcm_writei(pcm_handle, buffer, done / (channels * 2));
+            int samples = done / (channels * 2);
+            apply_volume_to_buffer((short*)buffer, samples, channels);
+
+            int pcm_err = snd_pcm_writei(pcm_handle, buffer, samples);
             if (pcm_err == -EPIPE) {
                 snd_pcm_prepare(pcm_handle);
             } else if (pcm_err < 0) {
