@@ -1,24 +1,33 @@
 #ifndef PLAYER_H
 #define PLAYER_H
 
+#define _POSIX_C_SOURCE 200112L
+#include <alloca.h>
+#include <alsa/asoundlib.h>
+#include <dirent.h>
+#include <mpg123.h>
+#include <pthread.h>
+#include <sndfile.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-#include <dirent.h>
+#include <sys/ioctl.h>
+#include <taglib/tag_c.h>
 #include <termios.h>
 #include <time.h>
-#include <pthread.h>
-#include <alsa/asoundlib.h>
-#include <sndfile.h>
-#include <mpg123.h>
-#include <alloca.h>
+#include <unistd.h>
 
-#define WIDTH 168
-#define HEIGHT 39
-#define LEFT_WIDTH 84
-#define IMAGE_X 6
-#define IMAGE_Y 6
+extern int TERM_WIDTH;
+extern int TERM_HEIGHT;
+extern int LEFT_WIDTH;
+extern int RIGHT_WIDTH;
+extern int IMAGE_WIDTH;
+extern int IMAGE_HEIGHT;
+extern int IMAGE_X;
+extern int IMAGE_Y;
+extern int current_volume;
+extern int playlist_offset;
+
 #define ALSA_BUFFER_SIZE 4096
 #define ALSA_PERIOD_SIZE 1024
 #define SAMPLE_RATE 44100
@@ -36,7 +45,7 @@ typedef struct {
 } Track;
 
 typedef struct {
-    Track *tracks;
+    Track* tracks;
     int count;
     int current;
     int playing;
@@ -55,13 +64,16 @@ extern time_t last_timer_update;
 extern char music_directory[512];
 extern pthread_mutex_t draw_mutex;
 extern pthread_mutex_t audio_mutex;
-extern snd_pcm_t *pcm_handle;
-extern mpg123_handle *mp3_handle;
+extern snd_pcm_t* pcm_handle;
+extern mpg123_handle* mp3_handle;
 
 void msleep(int milliseconds);
 void enable_raw_mode();
 void disable_raw_mode();
 void clear_screen();
 void set_cursor_position(int row, int col);
+void update_terminal_size();
+void change_volume(int delta);
+void set_alsa_volume();
 
 #endif
