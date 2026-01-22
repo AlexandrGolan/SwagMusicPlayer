@@ -26,21 +26,21 @@
 #define FORMAT SND_PCM_FORMAT_S16_LE
 
 typedef struct {
-  char filename[256];
-  char title[256];
-  char author[256];
-  char album[256];
-  int duration;
-  int time_remaining;
-  int file_type;
+    char filename[256];
+    char title[256];
+    char author[256];
+    char album[256];
+    int duration;
+    int time_remaining;
+    int file_type;
 } Track;
 
 typedef struct {
-  Track *tracks;
-  int count;
-  int current;
-  int playing;
-  int position;
+    Track* tracks;
+    int count;
+    int current;
+    int playing;
+    int position;
 } Playlist;
 
 extern struct termios original_termios;
@@ -55,8 +55,8 @@ extern time_t last_timer_update;
 extern char music_directory[512];
 extern pthread_mutex_t draw_mutex;
 extern pthread_mutex_t audio_mutex;
-extern snd_pcm_t *pcm_handle;
-extern mpg123_handle *mp3_handle;
+extern snd_pcm_t* pcm_handle;
+extern mpg123_handle* mp3_handle;
 
 void msleep(int milliseconds);
 void enable_raw_mode();

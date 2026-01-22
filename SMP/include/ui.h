@@ -9,7 +9,7 @@ void display_left_panel();
 void draw_timer_only();
 void draw_status_only();
 void draw_track_list_only();
-void format_time(int seconds, char *buffer, size_t size);
+void format_time(int seconds, char* buffer, size_t size);
 int read_key();
 void handle_input();
 
