@@ -9,6 +9,6 @@ void list_audio_devices();
 int play_wav_file(const char *filename);
 int play_mp3_file(const char *filename);
 void stop_playback();
-void* playback_thread_function(void* arg);
+void *playback_thread_function(void *arg);
 
 #endif

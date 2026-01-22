@@ -1,8 +1,8 @@
 #ifndef UI_H
 #define UI_H
 
-#include "player.h"
 #include "file_utils.h"
+#include "player.h"
 
 void draw_interface();
 void display_left_panel();

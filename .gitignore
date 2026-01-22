@@ -1,1 +1,4 @@
 *.o
+SMP/src/*.o
+SMP/music/
+format-code.py

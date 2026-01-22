@@ -1,18 +1,18 @@
 #ifndef PLAYER_H
 #define PLAYER_H
 
+#include <alloca.h>
+#include <alsa/asoundlib.h>
+#include <dirent.h>
+#include <mpg123.h>
+#include <pthread.h>
+#include <sndfile.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-#include <dirent.h>
 #include <termios.h>
 #include <time.h>
-#include <pthread.h>
-#include <alsa/asoundlib.h>
-#include <sndfile.h>
-#include <mpg123.h>
-#include <alloca.h>
+#include <unistd.h>
 
 #define WIDTH 168
 #define HEIGHT 39
@@ -26,21 +26,21 @@
 #define FORMAT SND_PCM_FORMAT_S16_LE
 
 typedef struct {
-    char filename[256];
-    char title[256];
-    char author[256];
-    char album[256];
-    int duration;
-    int time_remaining;
-    int file_type;
+  char filename[256];
+  char title[256];
+  char author[256];
+  char album[256];
+  int duration;
+  int time_remaining;
+  int file_type;
 } Track;
 
 typedef struct {
-    Track *tracks;
-    int count;
-    int current;
-    int playing;
-    int position;
+  Track *tracks;
+  int count;
+  int current;
+  int playing;
+  int position;
 } Playlist;
 
 extern struct termios original_termios;
