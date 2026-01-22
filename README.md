@@ -1,4 +1,4 @@
-# NGSMP - NextGeneration SWAG MUSIC PLAYER
+# SMP - SWAG MUSIC PLAYER
 <div align="center">
   <h3>NGSMP (NextGeneration Swag Music Player) - a lightweight music player for your Linux system</h3>
   <br>
