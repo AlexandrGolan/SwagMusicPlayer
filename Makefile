@@ -27,6 +27,9 @@ $(TARGET): $(OBJS)
 	@$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
+	@rm -f $(OBJS)
+
+remove:
 	@rm -f $(TARGET) $(OBJS)
 	@if [ -f "$(INSTALL_DIR)/$(TARGET)" ]; then \
 		echo "Removing $(INSTALL_DIR)/$(TARGET)"; \

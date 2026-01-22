@@ -24,7 +24,7 @@ void draw_header() {
     }
 
     set_cursor_position(0, LEFT_WIDTH + 1);
-    printf(" NGSMP Media Player ");
+    printf(" SMP - SwagMusicPlayer");
 
     set_cursor_position(1, LEFT_WIDTH + 1);
     for (int i = 0; i < RIGHT_WIDTH - 2; i++) {

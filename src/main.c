@@ -137,7 +137,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    printf("NGSMP Media Player started. Loaded %d tracks.\n", playlist.count);
+    printf("SwagMusicPlayer started. Loaded %d tracks.\n", playlist.count);
     printf("Volume: %d%%\n", current_volume);
     printf("Press any key to continue...");
     getchar();
@@ -172,7 +172,7 @@ int main(int argc, char* argv[]) {
     pthread_mutex_destroy(&audio_mutex);
 
     clear_screen();
-    printf("NGSMP Media Player closed. Thank you for using!\n");
+    printf("SMP closed. Thank you for using!\n");
 
     return 0;
 }
