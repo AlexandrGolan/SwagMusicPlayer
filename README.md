@@ -1,6 +1,6 @@
 # SMP - SWAG MUSIC PLAYER
 <div align="center">
-  <h3>NGSMP (NextGeneration Swag Music Player) - a lightweight music player for your Linux system</h3>
+  <h3>SMP (Swag Music Player) - a lightweight music player for your Linux system</h3>
   <br>
 
   <img src="https://img.shields.io/github/languages/top/alexeev-prog/NGSWAGMUSICPLAYER?style=for-the-badge" alt="Top Language">
