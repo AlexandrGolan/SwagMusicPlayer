@@ -1,4 +1,4 @@
-/*
+﻿/*
  * SMP - Swag Music Player
  * Entry point and application loop.
  *
@@ -252,6 +252,7 @@ static int run_application(const Options *options)
     StrBuf output;
     SmpAudioFormat format;
     SmpStatus status;
+    static const char *const screen_on = "\x1b[?1049h\x1b[?25l\x1b[2J\x1b[H";
     bool running = true;
     int width = 0;
     int height = 0;
@@ -320,7 +321,8 @@ static int run_application(const Options *options)
         goto cleanup;
     }
 
-    smp_term_write("\x1b[?25l", 6); /* hide the cursor */
+    /* Take over the whole screen and restore the shell afterwards. */
+    smp_term_write(screen_on, strlen(screen_on));
 
     while (running) {
         SmpKey key;
@@ -352,7 +354,24 @@ static int run_application(const Options *options)
         if (smp_term_take_resize()) {
             smp_term_get_size(&width, &height);
             (void)smp_frame_begin(&frame, width, height);
+            smp_term_write("\x1b[2J\x1b[H", 7);
             next_frame = 0;
+        }
+
+        /* Guard against terminals that resize without notifying us. */
+        {
+            int current_width = 0;
+            int current_height = 0;
+
+            smp_term_get_size(&current_width, &current_height);
+            if (current_width != width || current_height != height) {
+                width = current_width;
+                height = current_height;
+                if (smp_frame_begin(&frame, width, height)) {
+                    smp_term_write("\x1b[2J\x1b[H", 7);
+                    next_frame = 0;
+                }
+            }
         }
 
         if (now >= next_frame) {

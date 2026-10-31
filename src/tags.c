@@ -1,9 +1,13 @@
-/*
+﻿/*
  * SMP - Swag Music Player
  * Embedded metadata: ID3v2, ID3v1 and RIFF INFO chunks.
  *
  * SPDX-License-Identifier: MIT
  */
+#if !defined(_WIN32) && !defined(_POSIX_C_SOURCE)
+#define _POSIX_C_SOURCE 200809L
+#endif
+
 #include "smp/tags.h"
 
 #include <stdio.h>
@@ -98,10 +102,10 @@ static uint32_t cp1251_to_unicode(uint8_t byte)
         return cp1251_upper[byte - 0xc0u];
     }
     if (byte == 0xa8u) {
-        return 0x0401; /* РЃ */
+        return 0x0401; /* Р Рѓ */
     }
     if (byte == 0xb8u) {
-        return 0x0451; /* С‘ */
+        return 0x0451; /* РЎвЂ */
     }
     return 0xfffdu;
 }
@@ -488,6 +492,53 @@ static uint32_t read_le32(const uint8_t *data)
            | ((uint32_t)data[3] << 24);
 }
 
+/* Parses the sub-chunks of a LIST payload that starts with "INFO". */
+static bool parse_info_block(const uint8_t *data, size_t size, SmpTags *tags)
+{
+    size_t offset = 4u;
+    bool found = false;
+
+    if (data == NULL || tags == NULL || size < 8u || memcmp(data, "INFO", 4) != 0) {
+        return false;
+    }
+
+    while (offset + 8u <= size) {
+        const uint8_t *item = data + offset;
+        uint32_t item_size = read_le32(item + 4);
+        const uint8_t *value = item + 8u;
+        size_t value_size;
+        StrBuf text;
+
+        if ((size_t)item_size > size - offset - 8u) {
+            item_size = (uint32_t)(size - offset - 8u);
+        }
+        value_size = bounded_length((const char *)value, item_size);
+
+        sb_init(&text);
+        if (is_valid_utf8(value, value_size)) {
+            (void)sb_append_n(&text, (const char *)value, value_size);
+        } else {
+            append_cp1251(&text, value, value_size);
+        }
+
+        if (memcmp(item, "INAM", 4) == 0) {
+            assign_field(tags->title, sizeof(tags->title), &text);
+            found = true;
+        } else if (memcmp(item, "IART", 4) == 0) {
+            assign_field(tags->artist, sizeof(tags->artist), &text);
+            found = true;
+        } else if (memcmp(item, "IPRD", 4) == 0 || memcmp(item, "IALB", 4) == 0) {
+            assign_field(tags->album, sizeof(tags->album), &text);
+            found = true;
+        }
+
+        sb_free(&text);
+        offset += 8u + ((item_size + 1u) & ~1u);
+    }
+
+    return found;
+}
+
 SmpTagFormat smp_tags_parse_riff(const uint8_t *data, size_t size, SmpTags *tags)
 {
     size_t offset;
@@ -513,47 +564,8 @@ SmpTagFormat smp_tags_parse_riff(const uint8_t *data, size_t size, SmpTags *tags
         if (memcmp(chunk, "LIST", 4) == 0 && chunk_size >= 4u
             && memcmp(data + payload, "INFO", 4) == 0)
         {
-            size_t info_offset = payload + 4u;
-            size_t info_end = payload + chunk_size;
-
-            while (info_offset + 8u <= info_end) {
-                const uint8_t *item = data + info_offset;
-                uint32_t item_size = read_le32(item + 4);
-                const uint8_t *value = item + 8u;
-                size_t value_size;
-
-                if ((size_t)item_size > info_end - (info_offset + 8u)) {
-                    item_size = (uint32_t)(info_end - (info_offset + 8u));
-                }
-                value_size = bounded_length((const char *)value, item_size);
-                if (value_size > item_size) {
-                    value_size = item_size;
-                }
-
-                {
-                    StrBuf text;
-
-                    sb_init(&text);
-                    if (is_valid_utf8(value, value_size)) {
-                        (void)sb_append_n(&text, (const char *)value, value_size);
-                    } else {
-                        append_cp1251(&text, value, value_size);
-                    }
-
-                    if (memcmp(item, "INAM", 4) == 0) {
-                        assign_field(tags->title, sizeof(tags->title), &text);
-                        format = SMP_TAG_FORMAT_RIFF_INFO;
-                    } else if (memcmp(item, "IART", 4) == 0) {
-                        assign_field(tags->artist, sizeof(tags->artist), &text);
-                        format = SMP_TAG_FORMAT_RIFF_INFO;
-                    } else if (memcmp(item, "IPRD", 4) == 0 || memcmp(item, "IALB", 4) == 0) {
-                        assign_field(tags->album, sizeof(tags->album), &text);
-                        format = SMP_TAG_FORMAT_RIFF_INFO;
-                    }
-                    sb_free(&text);
-                }
-
-                info_offset += 8u + ((item_size + 1u) & ~1u);
+            if (parse_info_block(data + payload, chunk_size, tags)) {
+                format = SMP_TAG_FORMAT_RIFF_INFO;
             }
         }
 
@@ -561,6 +573,70 @@ SmpTagFormat smp_tags_parse_riff(const uint8_t *data, size_t size, SmpTags *tags
     }
 
     return format;
+}
+
+/* Moves the cursor forward by `count` bytes; 64-bit safe on both platforms. */
+static bool skip_bytes(FILE *file, uint64_t count)
+{
+#ifdef _WIN32
+    return _fseeki64(file, (__int64)count, SEEK_CUR) == 0;
+#else
+    return fseeko(file, (off_t)count, SEEK_CUR) == 0;
+#endif
+}
+
+/*
+ * Walks the RIFF chunks of an open file. The LIST/INFO block is often placed
+ * after the (potentially huge) data chunk, so the file is streamed instead of
+ * being read into memory.
+ */
+static bool stream_riff_tags(FILE *file, SmpTags *tags)
+{
+    uint8_t header[12];
+    bool found = false;
+
+    if (fread(header, 1, sizeof(header), file) != sizeof(header)) {
+        return false;
+    }
+    if (memcmp(header, "RIFF", 4) != 0 || memcmp(header + 8, "WAVE", 4) != 0) {
+        return false;
+    }
+
+    for (;;) {
+        uint8_t chunk[8];
+        uint64_t chunk_size;
+        uint64_t padded;
+
+        if (fread(chunk, 1, sizeof(chunk), file) != sizeof(chunk)) {
+            break;
+        }
+
+        chunk_size = read_le32(chunk + 4);
+        padded = chunk_size + (chunk_size & 1u);
+
+        if (memcmp(chunk, "LIST", 4) == 0 && chunk_size >= 4u && chunk_size <= 4u * 1024u * 1024u) {
+            uint8_t *payload = (uint8_t *)malloc((size_t)chunk_size);
+
+            if (payload == NULL) {
+                return found;
+            }
+            if (fread(payload, 1, (size_t)chunk_size, file) != (size_t)chunk_size) {
+                free(payload);
+                break;
+            }
+            if (memcmp(payload, "INFO", 4) == 0) {
+                found = parse_info_block(payload, (size_t)chunk_size, tags) || found;
+            }
+            free(payload);
+            if ((chunk_size & 1u) != 0u && !skip_bytes(file, 1u)) {
+                break;
+            }
+        } else if (!skip_bytes(file, padded)) {
+            break;
+        }
+    }
+
+    return found;
 }
 
 static bool has_text(const char *text)
@@ -581,17 +657,26 @@ SmpStatus smp_tags_read_file(const char *path, SmpTags *tags)
 
     smp_tags_init(tags);
 
-    if (smp_file_read(path, TAG_READ_LIMIT, &head, &head_size) != SMP_OK) {
-        return SMP_ERR_IO;
-    }
-
     if (smp_path_has_extension(path, ".wav")) {
-        format = smp_tags_parse_riff((const uint8_t *)head, head_size, tags);
+        FILE *file = smp_file_open(path);
+
+        if (file == NULL) {
+            return SMP_ERR_IO;
+        }
+        if (stream_riff_tags(file, tags)) {
+            format = SMP_TAG_FORMAT_RIFF_INFO;
+        }
+        fclose(file);
     } else {
+        if (smp_file_read(path, TAG_READ_LIMIT, &head, &head_size) != SMP_OK) {
+            return SMP_ERR_IO;
+        }
+
         id3_size = smp_id3v2_size((const uint8_t *)head, head_size);
         if (id3_size > 0) {
             format = smp_tags_parse_id3v2((const uint8_t *)head, id3_size, tags);
         }
+        free(head);
     }
 
     if (format == SMP_TAG_FORMAT_UNKNOWN) {
@@ -605,8 +690,6 @@ SmpStatus smp_tags_read_file(const char *path, SmpTags *tags)
             free(tail);
         }
     }
-
-    free(head);
 
     if (!has_text(tags->title)) {
         const char *base = smp_path_basename(path);

@@ -1,4 +1,4 @@
-/*
+﻿/*
  * SMP - Swag Music Player
  * Cell based render frame with ANSI output.
  *
@@ -352,7 +352,11 @@ void smp_frame_render(const SmpFrame *frame, StrBuf *out)
             (void)sb_append_n(out, encoded, length);
             column++;
         }
+
+        /* Clear whatever may be left to the right of the frame. */
+        (void)sb_append(out, "\x1b[K");
     }
 
-    (void)sb_append(out, "\x1b[0m");
+    /* Clear the rows below the frame (terminals can show a partial row). */
+    (void)sb_append(out, "\x1b[0m\x1b[J");
 }

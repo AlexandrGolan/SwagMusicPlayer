@@ -1,4 +1,4 @@
-/*
+﻿/*
  * SMP - Swag Music Player
  * Portable file system helpers.
  *
@@ -11,6 +11,7 @@
 #define SMP_FS_H
 
 #include <stdbool.h>
+#include <stdio.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -63,6 +64,12 @@ SmpStatus smp_file_read_tail(const char *path, size_t max_bytes, void **out_data
 
 /* Size of a regular file in bytes, or SMP_ERR_NOT_FOUND. */
 SmpStatus smp_file_size(const char *path, uint64_t *out_size);
+
+/*
+ * Opens a file for binary reading with a UTF-8 path (UTF-16 on Windows).
+ * Returns NULL on failure; close with fclose().
+ */
+FILE *smp_file_open(const char *path);
 
 /* Recursively creates a directory including missing parents. */
 SmpStatus smp_dir_create(const char *path);

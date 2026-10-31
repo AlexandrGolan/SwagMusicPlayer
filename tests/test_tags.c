@@ -1,4 +1,4 @@
-/*
+﻿/*
  * SMP - Swag Music Player
  * Tests for embedded metadata parsing.
  *
@@ -107,7 +107,7 @@ static void test_id3v2_encodings(void)
     SmpTags tags;
 
     smp_test_begin("id3v2 latin1 and utf16 frames");
-    /* 0xE9 is 'é' in ISO-8859-1. */
+    /* 0xE9 is 'Г©' in ISO-8859-1. */
     offset += append_text_frame(buffer + offset, "TIT2", "Caf\xe9", 0);
     offset += append_utf16_frame(buffer + offset, "TPE1", "Aya");
 
@@ -192,7 +192,7 @@ static void test_id3v1(void)
     smp_test_begin("id3v1 with cp1251 text");
     memset(record, 0, sizeof(record));
     memcpy(record, "TAG", 3);
-    /* "Привет" in CP1251. */
+    /* "РџСЂРёРІРµС‚" in CP1251. */
     memcpy(record + 3, "\xcf\xf0\xe8\xe2\xe5\xf2", 6);
     memcpy(record + 33, "Artist", 6);
     memcpy(record + 63, "Album", 5);
@@ -311,9 +311,73 @@ static void test_read_file_id3v2(void)
     smp_test_end();
 }
 
+static void test_riff_info_after_data(void)
+{
+    const char *path = "smp_test_tags_tail_info.wav";
+    uint8_t header[44];
+    const char *title = "Tail Title";
+    size_t title_size = strlen(title) + 1u;
+    FILE *file;
+    SmpTags tags;
+
+    smp_test_begin("riff INFO placed after the data chunk");
+
+    memset(header, 0, sizeof(header));
+    memcpy(header, "RIFF", 4);
+    memcpy(header + 8, "WAVEfmt ", 8);
+    write_le32(header + 16, 16);
+    header[20] = 1;
+    header[22] = 2;
+    write_le32(header + 24, 48000);
+    write_le32(header + 28, 192000);
+    header[32] = 4;
+    header[34] = 16;
+    memcpy(header + 36, "data", 4);
+    write_le32(header + 40, 2048u);
+
+    file = fopen(path, "wb");
+    SMP_CHECK(file != NULL);
+    if (file != NULL) {
+        uint8_t *silence = (uint8_t *)calloc(1, 2048);
+
+        fwrite(header, 1, sizeof(header), file);
+        if (silence != NULL) {
+            fwrite(silence, 1, 2048, file);
+            free(silence);
+        }
+
+        /* LIST/INFO comes after the samples, exactly like some encoders do. */
+        {
+            uint8_t list[64];
+            size_t offset = 0;
+
+            memcpy(list + offset, "LIST", 4);
+            write_le32(list + offset + 4, (uint32_t)(4u + 8u + title_size));
+            offset += 8;
+            memcpy(list + offset, "INFO", 4);
+            offset += 4;
+            memcpy(list + offset, "INAM", 4);
+            write_le32(list + offset + 4, (uint32_t)title_size);
+            offset += 8;
+            memcpy(list + offset, title, title_size);
+            offset += title_size;
+            fwrite(list, 1, offset, file);
+        }
+        fclose(file);
+    }
+
+    smp_tags_init(&tags);
+    SMP_CHECK_INT(smp_tags_read_file(path, &tags), SMP_OK);
+    SMP_CHECK_STR(tags.title, "Tail Title");
+
+    (void)smp_file_remove(path);
+    smp_test_end();
+}
+
 void suite_tags(void)
 {
     smp_test_suite("tags");
+    test_riff_info_after_data();
     test_id3v2_utf8();
     test_id3v2_encodings();
     test_id3v2_24();

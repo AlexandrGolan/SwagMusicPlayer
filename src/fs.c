@@ -1,4 +1,4 @@
-/*
+﻿/*
  * SMP - Swag Music Player
  * Portable file system helpers (POSIX + Win32).
  *
@@ -422,6 +422,14 @@ static SmpStatus read_stream(FILE *file, size_t max_bytes, void **out_data, size
     *out_data = buffer;
     *out_size = used;
     return SMP_OK;
+}
+
+FILE *smp_file_open(const char *path)
+{
+    if (path == NULL) {
+        return NULL;
+    }
+    return open_utf8(path, "rb");
 }
 
 SmpStatus smp_file_read(const char *path, size_t max_bytes, void **out_data, size_t *out_size)

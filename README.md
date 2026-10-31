@@ -15,6 +15,8 @@ Linux (ALSA) В· Windows (WASAPI) В· no shell-outs В· no external runtime d
 SMP shows your album art, the current track and the playlist in one terminal
 window, plays WAV and MP3 files, and stays out of the way.
 
+![SMP running in Windows Terminal](docs/screenshot.png)
+
 ```
  SMP Swag Music Player                         vol  70% в–€в–€в–€в–€в–€в–€в–€в–€в–€в–€в–€в–‘в–‘в–‘в–‘в–‘
  в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ

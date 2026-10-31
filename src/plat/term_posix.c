@@ -1,4 +1,4 @@
-/*
+﻿/*
  * SMP - Swag Music Player
  * Terminal handling for POSIX platforms.
  *
@@ -98,7 +98,7 @@ bool smp_term_init(void)
 
 void smp_term_shutdown(void)
 {
-    static const char *const cleanups = "\x1b[0m\x1b[?25h\n";
+    static const char *const cleanups = "\x1b[0m\x1b[?25h\x1b[?1049l\n";
 
     if (raw_mode_active) {
         (void)tcsetattr(STDIN_FILENO, TCSAFLUSH, &saved_termios);

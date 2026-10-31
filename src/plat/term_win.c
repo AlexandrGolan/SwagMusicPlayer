@@ -1,4 +1,4 @@
-/*
+﻿/*
  * SMP - Swag Music Player
  * Terminal handling for Windows (VT sequences + console input).
  *
@@ -74,7 +74,7 @@ bool smp_term_init(void)
 
 void smp_term_shutdown(void)
 {
-    static const char *const cleanup = "\x1b[0m\x1b[?25h\n";
+    static const char *const cleanup = "\x1b[0m\x1b[?25h\x1b[?1049l\n";
 
     smp_term_write(cleanup, strlen(cleanup));
 
