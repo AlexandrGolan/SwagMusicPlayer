@@ -1,56 +1,157 @@
-# SMP - SWAG MUSIC PLAYER
-<div align="center">
-  <h3>SMP (Swag Music Player) - a lightweight music player for your Linux system</h3>
-  <br>
-
-  <img src="https://img.shields.io/github/languages/top/alexeev-prog/NGSWAGMUSICPLAYER?style=for-the-badge" alt="Top Language">
-  <img src="https://img.shields.io/github/languages/count/alexeev-prog/NGSWAGMUSICPLAYER?style=for-the-badge" alt="Language Count">
-  <img src="https://img.shields.io/github/license/alexeev-prog/NGSWAGMUSICPLAYER?style=for-the-badge" alt="License">
-  <img src="https://img.shields.io/github/issues/alexeev-prog/NGSWAGMUSICPLAYER?style=for-the-badge&color=critical" alt="Issues">
-  <a href="https://github.com/alexeev-prog/NGSWAGMUSICPLAYER/stargazers">
-    <img src="https://img.shields.io/github/stars/alexeev-prog/NGSWAGMUSICPLAYER?style=for-the-badge&logo=github" alt="Stars">
-  </a>
-  <img src="https://img.shields.io/github/last-commit/alexeev-prog/NGSWAGMUSICPLAYER?style=for-the-badge" alt="Last Commit">
-  <img src="https://img.shields.io/github/contributors/alexeev-prog/NGSWAGMUSICPLAYER?style=for-the-badge" alt="Contributors">
-</div>
+﻿# SMP вЂ” Swag Music Player
 
 <div align="center">
-  <img src="https://raw.githubusercontent.com/alexeev-prog/NGSWAGMUSICPLAYER/refs/heads/main/docs/pallet-0.png" width="600" alt="">
+
+**A small, fast terminal music player for WAV and MP3 files.**
+
+Linux (ALSA) В· Windows (WASAPI) В· no shell-outs В· no external runtime dependencies
+
+[![CI](https://github.com/AlexandrGolan/SwagMusicPlayer/actions/workflows/ci.yml/badge.svg)](https://github.com/AlexandrGolan/SwagMusicPlayer/actions/workflows/ci.yml)
+[![License](https://img.shields.io/github/license/AlexandrGolan/SwagMusicPlayer?style=flat-square)](LICENSE)
+[![Top language](https://img.shields.io/github/languages/top/AlexandrGolan/SwagMusicPlayer?style=flat-square)](https://github.com/AlexandrGolan/SwagMusicPlayer)
+
 </div>
 
+SMP shows your album art, the current track and the playlist in one terminal
+window, plays WAV and MP3 files, and stays out of the way.
+
+```
+ SMP Swag Music Player                         vol  70% в–€в–€в–€в–€в–€в–€в–€в–€в–€в–€в–€в–‘в–‘в–‘в–‘в–‘
+ в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+                     в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ
+      в–„в–„в–„в–„в–„в–„в–„в–„в–„      в”‚ selected                     в”‚
+     в–€в–€в–€в–€в–€в–€в–€в–€в–€в–€в–€     в”‚ Duvet                        в”‚
+    в–€в–€в–€в–€в–€в–€в–€в–€в–€в–€в–€в–€в–€    в”‚ bГґa                          в”‚
+     в–€в–€в–€в–€в–€в–€в–€в–€в–€в–€в–€     в”‚ Twilight                     в”‚
+      в–Ђв–Ђв–Ђв–Ђв–Ђв–Ђв–Ђв–Ђв–Ђ      в”‚ [в–€в–€в–€в–€в–€в–€в–€в–€в–€в–€в–‘в–‘в–‘в–‘в–‘в–‘в–‘в–‘в–‘в–‘] 1:02 / 3:45 в”‚
+                     в”њв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”¤
+                     в”‚ playlist  2 tracks           в”‚
+                     в”‚  1. Duvet            3:45  в–¶ в”‚
+                     в”‚  2. Twilight         4:10    в”‚
+ в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+ stopped  track 1/2  volume 70%  audio alsa
+ в†‘в†“ select  вЏЋ play  space pause  в†ђв†’ seek  +/- vol  n/p  ? help  q quit
+```
+
+## Features
+
+- Plays **WAV** (PCM, float, A-Law, Вµ-Law, MS ADPCM, IMA ADPCM) and **MP3**
+- Album art rendered with true-colour half blocks вЂ” works in any modern
+  terminal, no `tiv`/`chafa`/ImageMagick required
+- Correct playback of any sample rate and channel count: everything is
+  resampled to 48 kHz stereo on the fly
+- Reading of **ID3v2.2/v2.3/v2.4**, **ID3v1** and **RIFF INFO** tags,
+  including UTF-16 and CP1251 text
+- Seeking, pause/resume, volume control, natural track ordering
+- UTF-8 aware layout (Cyrillic, CJK, emoji)
+- No flicker: the whole screen is composed in memory and written in one go
+- Portable C17 core, unit tested; the platform layer is tiny and isolated
+
+## Requirements
+
+| Platform | Requirements |
+| --- | --- |
+| Linux | `cmake` в‰Ґ 3.20, a C17 compiler, `pkg-config`, ALSA headers (`libasound2-dev` on Debian/Ubuntu, `alsa-lib` on Fedora/Arch) |
+| Windows | CMake в‰Ґ 3.20, MinGW-w64 (MSYS2) or MSVC 2019+ |
+
+Everything else is vendored: `dr_wav`, `dr_mp3` and `stb_image` live in
+[`vendor/`](vendor/README.md).
 
 ## Build
 
 ```bash
-make install # moves to the /usr/local/bin folder
-make clean # remove files (From /usr/local/bin too)
-make depence-info # displays a list of installation dependencies
-make # make binary file in working directory
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+ctest --test-dir build --output-on-failure
+sudo cmake --install build          # optional, installs /usr/local/bin/smp
 ```
 
-## How To Use
-To fully experience the player's features, follow these steps:
-
-1. Create a folder
-2. Place audio files in WAV or MP3 formats there
-3. Place a JPG or PNG image named "cover" in the folder
-4. Run the program, enter "smp" and then enter the path to the folder you created, then press Enter twice the first time at startup and the second time after messages from ALSA
-5. on the arrows you can scroll through the tracks (next/previous) on the spacebar you can pause and resume the music on the q key exit
-
-Example:
+Presets are provided for the common cases:
 
 ```bash
-music/
-├── bôa - Duvet.mp3     # Audio file
-└── cover.jpg           # Cover image
+cmake --preset default && cmake --build --preset default
+cmake --preset asan    && cmake --build --preset asan && ctest --preset asan
 ```
 
-### An example of what the interface looks like
-<img width="1695" height="898" alt="" src="https://habrastorage.org/webt/ok/xe/fw/okxefwcb3muvhzlgbkep2d7wanc.png" />
+On Windows with MSYS2:
 
----
+```bash
+pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja
+cmake --preset windows-mingw
+cmake --build --preset windows-mingw
+ctest --preset windows-mingw
+```
 
-<div align="center">
-    <sub>Licensed by [MIT License](./LICENSE)</sub>
-</div>
+### Nix
 
+```bash
+nix develop          # dev shell with everything needed
+nix build            # builds ./result/bin/smp
+```
+
+## Usage
+
+```bash
+smp ~/Music/Twilight            # play a directory
+smp -d ~/Music/Twilight         # same thing
+smp --audio null ~/Music        # silent backend, useful for testing
+smp --list-devices              # show output devices
+smp --help
+```
+
+Put the audio files and a cover image into one directory. The cover is looked
+up as `cover.*`, `album.*`, `folder.*`, `front.*` or `art.*`
+(`png`, `jpg`, `jpeg`, `bmp`, `gif`).
+
+```
+Twilight/
+в”њв”Ђв”Ђ 01 - Duvet.mp3
+в”њв”Ђв”Ђ 02 - Twilight.mp3
+в””в”Ђв”Ђ cover.png
+```
+
+### Keyboard
+
+| Key | Action |
+| --- | --- |
+| `в†‘` / `в†“` | move the selection |
+| `Enter` | play the selected track |
+| `Space` | play / pause |
+| `в†ђ` / `в†’` | seek 5 seconds |
+| `n` / `p` | next / previous track |
+| `+` / `-`, `PgUp` / `PgDn` | volume |
+| `r` | reload the library |
+| `h`, `?` | help |
+| `q`, `Esc` | quit |
+
+## Project layout
+
+```
+include/smp/     public headers (one per module)
+src/             portable implementation
+src/plat/        terminal and thread backends (POSIX / Win32)
+src/audio/       audio backends (ALSA / WASAPI / null)
+vendor/          single-header third party libraries
+tests/           dependency-free unit tests, run by CTest
+docs/            architecture notes and the audit of the 1.x code
+```
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the threading model and
+the module dependency graph, and [docs/AUDIT.md](docs/AUDIT.md) for the list of
+defects that were fixed during the rewrite.
+
+## Testing
+
+```bash
+ctest --test-dir build --output-on-failure
+```
+
+The suite covers UTF-8 and layout helpers, path handling, the PCM
+converter/resampler, ID3/RIFF parsing, WAV decoding, playlist scanning,
+the render frame and the playback state machine. It runs without an audio
+device or a TTY.
+
+## License
+
+MIT вЂ” see [LICENSE](LICENSE). Vendored libraries keep their own licenses, see
+[vendor/README.md](vendor/README.md).

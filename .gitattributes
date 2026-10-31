@@ -1,0 +1,14 @@
+# Normalise line endings in the repository; check out native line endings
+# on Windows only for files that need them.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.bmp binary
+*.gif binary
+*.ico binary
+
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf

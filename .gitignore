@@ -1,6 +1,36 @@
+# Build trees
+build/
+.build/
+cmake-build-*/
+out/
+
+# Compiler output
 *.o
-src/*.o
+*.obj
+*.a
+*.lib
+*.exe
+*.dll
+*.dylib
+*.so
+*.so.*
+*.pdb
+*.ilk
+
+# CMake / tooling
+compile_commands.json
+.cache/
+.vscode/
+.idea/
+
+# Nix
+result
+result-*
+.direnv/
+
+# Test artefacts (the suite writes temporary files into the build tree)
+smp_test_*
+test_tmp/
+
+# Local music
 music/
-format-code.py
-music/
-smp

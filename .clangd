@@ -1,5 +1,5 @@
 CompileFlags:
   Add:
-    - "-I./include/"
-    - "-I/include/"
-  CompilationDatabase: build/dev
+    - "-I./include"
+    - "-I./vendor"
+  CompilationDatabase: build/debug

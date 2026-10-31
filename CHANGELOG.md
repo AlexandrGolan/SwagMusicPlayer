@@ -1,161 +1,66 @@
-commit 70ab9084261fc7d3c04941664e3810054a26eca7
-Author: Alexeev Bronislav <alexeev.dev@mail.ru>
-Date:   Thu Jan 22 20:53:36 2026 +0700
+# Changelog
 
-    update readme
+All notable changes to this project are documented here.
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
+and this project adheres to [Semantic Versioning](https://semver.org/).
 
-commit 65967aabece3165553bfbaa637518623de549b51
-Author: Alexeev Bronislav <alexeev.dev@mail.ru>
-Date:   Thu Jan 22 20:52:03 2026 +0700
+## [2.0.0] — 2026-11-01
 
-    update UI
+Complete rewrite of the 1.x codebase. The user interface, the keyboard layout
+and the "one directory = one album" model are preserved.
 
-commit 425be8d52c8a2e777d511ffc2b130abef5db2989
-Author: Alexeev Bronislav <alexeev.dev@mail.ru>
-Date:   Thu Jan 22 20:48:54 2026 +0700
+### Added
 
-    improve navigation, add volume bar, improve UI, improve cover view
+- Windows support through a WASAPI backend; the player now builds and runs on
+  Linux and Windows from the same sources.
+- Seeking (`←`/`→`, `smp_player_seek`), volume control in software, library
+  reload (`r`) and a help overlay (`?`).
+- Built-in cover art rendering with true-colour half blocks. No `tiv`, no
+  ImageMagick, no subprocesses.
+- ID3v2.2/v2.3/v2.4, ID3v1 and RIFF INFO tag reading, including UTF-16 and
+  CP1251 text.
+- Correct playback of any sample rate and channel count (resampler and channel
+  mapper in `src/pcm.c`).
+- Unit test suite (11 groups, 5 380 assertions) and a GitHub Actions workflow
+  for Linux and Windows.
+- CMake presets, `flake.nix` dev shell, `--help`, `--version`,
+  `--list-devices`, `--audio <backend>`.
+- Documentation: `docs/ARCHITECTURE.md` and `docs/AUDIT.md`.
 
-commit d7703b791694f6e1172bf768adf39fac16674478
-Author: Alexeev Bronislav <alexeev.dev@mail.ru>
-Date:   Thu Jan 22 18:23:42 2026 +0700
+### Changed
 
-    update .gitignore
+- C99 → C17; fixed-size buffers replaced with owned strings.
+- One persistent worker thread with a mutex/condition variable instead of
+  ad-hoc thread creation on every track change.
+- The screen is composed as a cell grid and written in one pass instead of
+  `printf` per character with a full clear on every frame.
+- Build system: hand-written `Makefile` → CMake with `pkg-config`, install
+  rules and sanitizer presets.
+- WAV and MP3 decoding moved to the vendored `dr_wav`/`dr_mp3`, dropping the
+  `libsndfile`, `libmpg123` and `taglib` dependencies.
 
-commit 6ff34f9cfe90b678171ad734549c222dd0852993
-Author: Alexeev Bronislav <alexeev.dev@mail.ru>
-Date:   Thu Jan 22 18:22:56 2026 +0700
+### Fixed
 
-    update structure (up to root), update shell.nix and fix 32bit libs support
+- Out-of-bounds read when advancing past the last track.
+- Stack corruption from negative indices in the title/playlist truncation code.
+- Shell command injection through cover file names (`popen("tiv \"%s\"")`).
+- Interface freeze after pressing `Esc`.
+- Thread leak and concurrent writes to one PCM handle on track changes.
+- Data races on the playlist and playback flags.
+- Position derived from the wall clock, which made the timer jump after pause.
+- Mono WAV files not playing and non-44.1 kHz files playing at the wrong speed.
+- Terminal left in raw mode (no echo, hidden cursor) after `Ctrl+C` or errors.
+- Resource leaks on every early-exit path.
+- `system("which tiv")` being executed on every redraw.
 
-commit 2f18e380b837b939d43a9d1d108f6a079010cf0d
-Author: Alexeev Bronislav <alexeev.dev@mail.ru>
-Date:   Thu Jan 22 18:11:53 2026 +0700
+See [docs/AUDIT.md](docs/AUDIT.md) for the full list with locations.
 
-    update codestyle
+### Removed
 
-commit db075034276c4dcf82194201a6ec8b5719e4170d
-Author: Alexeev Bronislav <alexeev.dev@mail.ru>
-Date:   Thu Jan 22 18:10:55 2026 +0700
+- The `tiv` dependency and all `system()`/`popen()` calls.
+- `Makefile` and `shell.nix` (replaced by CMake and `flake.nix`).
+- Dead declarations (`count_visible_chars`) and duplicated globals.
 
-    update structure, add shell.nix, update makefile
+## [1.0.0] — 2025-11-30
 
-commit 091d1da97d4a2c31c18404642c33b5483f0b0761
-Author: AlexandrGolan <69524932+AlexandrGolan@users.noreply.github.com>
-Date:   Tue Jan 20 22:19:24 2026 +0300
-
-    Update audio.c
-
-commit 369d7be5baa5476d1b1e83e62ee89b398816e184
-Author: AlexandrGolan <69524932+AlexandrGolan@users.noreply.github.com>
-Date:   Sat Jan 17 17:24:36 2026 +0300
-
-    Update Makefile
-
-commit d7e05583975574a36577e7a594fee0c41b553bb7
-Author: AlexandrGolan <69524932+AlexandrGolan@users.noreply.github.com>
-Date:   Sat Jan 17 17:23:49 2026 +0300
-
-    Update Makefile
-
-commit c9ad185179427f47a6e9a61ca43215377cbcc4d6
-Author: AlexandrGolan <69524932+AlexandrGolan@users.noreply.github.com>
-Date:   Sat Jan 17 15:53:04 2026 +0300
-
-    Delete SMP/C-files/ui.o
-
-commit cd1f5c55a04ec3ef801d58fe5026ed286b192cfa
-Author: AlexandrGolan <69524932+AlexandrGolan@users.noreply.github.com>
-Date:   Sat Jan 17 15:52:53 2026 +0300
-
-    Delete SMP/C-files/playlist.o
-
-commit 6cac69a6e443b8559e22675cdae0b1a61198cc42
-Author: AlexandrGolan <69524932+AlexandrGolan@users.noreply.github.com>
-Date:   Sat Jan 17 15:52:39 2026 +0300
-
-    Delete SMP/C-files/main.o
-
-commit eb943bd64069d3943d0526c1127acfce52dafc36
-Author: AlexandrGolan <69524932+AlexandrGolan@users.noreply.github.com>
-Date:   Sat Jan 17 15:52:27 2026 +0300
-
-    Delete SMP/C-files/file_utils.o
-
-commit 997af7b3c2616019e903c6768e6048ff375c4672
-Author: AlexandrGolan <69524932+AlexandrGolan@users.noreply.github.com>
-Date:   Sat Jan 17 15:52:14 2026 +0300
-
-    Delete SMP/C-files/audio.o
-
-commit d548a006463c16da7bf11e24af547ee89e645203
-Author: AlexandrGolan <69524932+AlexandrGolan@users.noreply.github.com>
-Date:   Mon Dec 1 09:54:06 2025 +0300
-
-    Create .gitignore
-
-commit 90d3cb81066ac7e3be4dfb7fdd2d05e50410a3c3
-Author: AlexandrGolan <69524932+AlexandrGolan@users.noreply.github.com>
-Date:   Mon Dec 1 00:48:04 2025 +0300
-
-    Delete SMP/smp
-
-commit 81ced7e977de7de2306513705fd4cc4000e5c307
-Author: AlexandrGolan <69524932+AlexandrGolan@users.noreply.github.com>
-Date:   Mon Dec 1 00:46:45 2025 +0300
-
-    Add files via upload
-
-commit 9b98e97919b0073a1a4ad6e287de3280938c4772
-Author: AlexandrGolan <69524932+AlexandrGolan@users.noreply.github.com>
-Date:   Mon Dec 1 00:46:01 2025 +0300
-
-    Delete SMP directory
-
-commit 4e0a2fc33c67b2ffbc227d52fb57c9be16231e75
-Author: AlexandrGolan <69524932+AlexandrGolan@users.noreply.github.com>
-Date:   Sun Nov 30 07:55:57 2025 +0300
-
-    Update README.md
-
-commit cc52461a6fcaf922995539d34a10832a08dfd874
-Author: AlexandrGolan <69524932+AlexandrGolan@users.noreply.github.com>
-Date:   Sun Nov 30 07:49:17 2025 +0300
-
-    Update README.md
-
-commit 3cbf2321d29f36e1a2afda0e7f9de41b839b2444
-Author: AlexandrGolan <69524932+AlexandrGolan@users.noreply.github.com>
-Date:   Sun Nov 30 07:48:56 2025 +0300
-
-    Update README.md
-
-commit ff19796bf2b941b14dcc6765eb6cf709f7ba34f2
-Author: AlexandrGolan <69524932+AlexandrGolan@users.noreply.github.com>
-Date:   Sun Nov 30 07:47:28 2025 +0300
-
-    README.md
-
-commit bb7246015282a720ef0bb24c6aea545e92b84309
-Author: AlexandrGolan <69524932+AlexandrGolan@users.noreply.github.com>
-Date:   Sun Nov 30 07:34:09 2025 +0300
-
-    Delete SMP/README.md
-
-commit 18d407614aba59a09b7e3608f537e235a146d7bc
-Author: AlexandrGolan <69524932+AlexandrGolan@users.noreply.github.com>
-Date:   Sun Nov 30 07:33:38 2025 +0300
-
-    README.md
-
-commit 463c2199bcdb72e66ae24786a0696396f60fdab2
-Author: AlexandrGolan <69524932+AlexandrGolan@users.noreply.github.com>
-Date:   Sun Nov 30 07:32:47 2025 +0300
-
-    Add files via upload
-
-commit 016033dba9f235ee0f0a95c81149529129fd3b1b
-Author: AlexandrGolan <69524932+AlexandrGolan@users.noreply.github.com>
-Date:   Sun Nov 30 07:08:54 2025 +0300
-
-    Initial commit
+- Initial release: WAV/MP3 playback, playlist, cover art through `tiv`.

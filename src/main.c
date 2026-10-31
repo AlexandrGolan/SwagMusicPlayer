@@ -1,178 +1,433 @@
-#include <pthread.h>
-#include <signal.h>
+/*
+ * SMP - Swag Music Player
+ * Entry point and application loop.
+ *
+ * SPDX-License-Identifier: MIT
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
-#include <unistd.h>
 
-#include "audio.h"
-#include "config.h"
-#include "file_utils.h"
-#include "player.h"
-#include "playlist.h"
-#include "ui.h"
+#include "smp/audio.h"
+#include "smp/common.h"
+#include "smp/frame.h"
+#include "smp/fs.h"
+#include "smp/pcm.h"
+#include "smp/player.h"
+#include "smp/playlist.h"
+#include "smp/str.h"
+#include "smp/term.h"
+#include "smp/ui.h"
 
-Playlist playlist;
-pthread_t audio_thread;
-pthread_t playback_thread;
-int audio_thread_running = 1;
-int playback_thread_running = 0;
-time_t playback_start_time = 0;
-time_t last_draw_time = 0;
-time_t last_timer_update = 0;
-char music_directory[512];
-pthread_mutex_t draw_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t audio_mutex = PTHREAD_MUTEX_INITIALIZER;
-snd_pcm_t* pcm_handle = NULL;
-mpg123_handle* mp3_handle = NULL;
-struct termios original_termios;
-volatile sig_atomic_t resize_flag = 0;
+#define SMP_VERSION "2.0.0"
+#define SMP_FRAME_INTERVAL_MS 80
 
-void handle_resize(int sig) {
-    (void)sig;
-    resize_flag = 1;
+#ifdef _WIN32
+int wmain(int argc, wchar_t **wide_argv);
+#endif
+
+typedef struct {
+    const char *directory;
+    const char *backend;
+    bool list_devices;
+    bool render_once;
+} Options;
+
+static void print_usage(const char *program)
+{
+    printf("SMP (Swag Music Player) %s\n\n", SMP_VERSION);
+    printf("Usage: %s [options] <music-directory>\n\n", program);
+    printf("Options:\n");
+    printf("  -d, --directory <path>  directory with WAV/MP3 files (also positional)\n");
+    printf("      --audio <backend>   audio backend: auto, wasapi, alsa, null\n");
+    printf("      --list-devices      print available output devices and exit\n");
+    printf("      --render-once       render one frame to stdout and exit (debug)\n");
+    printf("  -h, --help              show this help\n");
+    printf("  -v, --version           show the version\n");
 }
 
-void* audio_thread_function(void* arg) {
-    (void)arg;
-    time_t last_update_time = time(NULL);
+static bool parse_options(int argc, char **argv, Options *options)
+{
+    int index;
 
-    while (audio_thread_running) {
-        if (resize_flag) {
-            resize_flag = 0;
-            draw_interface();
+    memset(options, 0, sizeof(*options));
+    options->backend = "auto";
+
+    for (index = 1; index < argc; index++) {
+        const char *argument = argv[index];
+
+        if (strcmp(argument, "-h") == 0 || strcmp(argument, "--help") == 0) {
+            print_usage(argv[0]);
+            exit(0);
         }
-
-        if (playlist.count == 0) {
-            msleep(100);
+        if (strcmp(argument, "-v") == 0 || strcmp(argument, "--version") == 0) {
+            printf("SMP %s\n", SMP_VERSION);
+            exit(0);
+        }
+        if (strcmp(argument, "--list-devices") == 0) {
+            options->list_devices = true;
             continue;
         }
-
-        if (!playback_thread_running && playlist.playing) {
-            auto_next_track();
+        if (strcmp(argument, "--render-once") == 0) {
+            options->render_once = true;
+            continue;
+        }
+        if (strcmp(argument, "-d") == 0 || strcmp(argument, "--directory") == 0) {
+            if (index + 1 >= argc) {
+                fprintf(stderr, "smp: %s requires a path\n", argument);
+                return false;
+            }
+            options->directory = argv[++index];
+            continue;
+        }
+        if (strcmp(argument, "--audio") == 0) {
+            if (index + 1 >= argc) {
+                fprintf(stderr, "smp: %s requires a backend name\n", argument);
+                return false;
+            }
+            options->backend = argv[++index];
+            continue;
+        }
+        if (argument[0] == '-') {
+            fprintf(stderr, "smp: unknown option '%s'\n", argument);
+            return false;
         }
 
-        if (playlist.playing && playback_thread_running && playlist.current < playlist.count) {
-            time_t current_time = time(NULL);
+        if (options->directory != NULL) {
+            fprintf(stderr, "smp: only one directory can be given\n");
+            return false;
+        }
+        options->directory = argument;
+    }
 
-            if (current_time != last_update_time) {
-                playlist.position = current_time - playback_start_time;
-                last_update_time = current_time;
+    return true;
+}
 
-                Track* current_track = &playlist.tracks[playlist.current];
-                if (current_track->duration > playlist.position) {
-                    current_track->time_remaining = current_track->duration - playlist.position;
-                } else {
-                    current_track->time_remaining = 0;
-                }
+static void handle_key(SmpKey key,
+                       SmpUiState *ui,
+                       Playlist *playlist,
+                       SmpPlayer *player,
+                       bool *running,
+                       const Options *options)
+{
+    SmpPlayerSnapshot snapshot;
 
-                if (current_time != last_timer_update) {
-                    draw_timer_only();
-                }
+    smp_player_snapshot(player, &snapshot);
 
-                if (playlist.position >= current_track->duration - 2) {
-                    auto_next_track();
-                }
+    switch (key.code) {
+    case SMP_KEY_UP:
+        if (playlist->count > 0) {
+            smp_playlist_move(playlist, -1);
+            ui->selection = playlist->current;
+        }
+        break;
+
+    case SMP_KEY_DOWN:
+        if (playlist->count > 0) {
+            smp_playlist_move(playlist, 1);
+            ui->selection = playlist->current;
+        }
+        break;
+
+    case SMP_KEY_LEFT:
+        if (snapshot.state == SMP_PLAYER_PLAYING || snapshot.state == SMP_PLAYER_PAUSED) {
+            smp_player_seek_by(player, -5.0);
+        }
+        break;
+
+    case SMP_KEY_RIGHT:
+        if (snapshot.state == SMP_PLAYER_PLAYING || snapshot.state == SMP_PLAYER_PAUSED) {
+            smp_player_seek_by(player, 5.0);
+        }
+        break;
+
+    case SMP_KEY_PAGE_UP:
+        smp_player_set_volume(player, snapshot.volume + 5);
+        break;
+
+    case SMP_KEY_PAGE_DOWN:
+        smp_player_set_volume(player, snapshot.volume - 5);
+        break;
+
+    case SMP_KEY_ENTER:
+        if (playlist->count > 0 && ui->selection < playlist->count) {
+            smp_playlist_select(playlist, ui->selection);
+            smp_player_play(player, ui->selection);
+        }
+        break;
+
+    case SMP_KEY_SPACE:
+        if (playlist->count > 0 && snapshot.state != SMP_PLAYER_PLAYING
+            && snapshot.state != SMP_PLAYER_PAUSED)
+        {
+            smp_playlist_select(playlist, ui->selection);
+            smp_player_play(player, ui->selection);
+        } else {
+            smp_player_toggle(player);
+        }
+        break;
+
+    case SMP_KEY_CHAR:
+        switch (key.character) {
+        case 'q':
+        case 'Q':
+            *running = false;
+            break;
+        case 'n':
+        case 'N':
+            smp_player_next(player);
+            break;
+        case 'p':
+        case 'P':
+            smp_player_previous(player);
+            break;
+        case '+':
+        case '=':
+            smp_player_set_volume(player, snapshot.volume + 5);
+            break;
+        case '-':
+        case '_':
+            smp_player_set_volume(player, snapshot.volume - 5);
+            break;
+        case 'h':
+        case 'H':
+        case '?':
+            ui->show_help = !ui->show_help;
+            break;
+        case 'r':
+        case 'R': {
+            SmpStatus status = smp_playlist_load(playlist, options->directory);
+
+            if (status == SMP_OK) {
+                smp_ui_set_message(ui, "library reloaded", smp_now_ms());
+            } else {
+                smp_ui_set_message(ui, "reload failed", smp_now_ms());
+            }
+            ui->selection = 0;
+            ui->scroll = 0;
+            break;
+        }
+        default:
+            break;
+        }
+        break;
+
+    case SMP_KEY_ESCAPE:
+    case SMP_KEY_CTRL_C:
+        *running = false;
+        break;
+
+    default:
+        break;
+    }
+}
+
+static void render_frame(SmpFrame *frame,
+                         SmpUiState *ui,
+                         const Playlist *playlist,
+                         SmpPlayer *player,
+                         const char *backend,
+                         StrBuf *output)
+{
+    SmpPlayerSnapshot snapshot;
+
+    smp_player_snapshot(player, &snapshot);
+
+    if (snapshot.track_index < playlist->count) {
+        ui->selection = SMP_MIN(ui->selection, playlist->count - 1u);
+    }
+
+    sb_clear(output);
+    smp_ui_render(ui, frame, playlist, &snapshot, backend, smp_now_ms());
+    smp_frame_render(frame, output);
+}
+
+static int run_application(const Options *options)
+{
+    Playlist playlist;
+    SmpAudioDevice *device = NULL;
+    SmpPlayer *player = NULL;
+    SmpUiState ui;
+    SmpFrame frame;
+    StrBuf output;
+    SmpAudioFormat format;
+    SmpStatus status;
+    bool running = true;
+    int width = 0;
+    int height = 0;
+    uint64_t next_frame = 0;
+
+    smp_playlist_init(&playlist);
+    smp_ui_init(&ui);
+    smp_frame_init(&frame);
+    sb_init(&output);
+
+    status = smp_playlist_load(&playlist, options->directory);
+    if (status == SMP_ERR_NOT_FOUND) {
+        fprintf(stderr, "smp: directory not found: %s\n", options->directory);
+        goto cleanup;
+    }
+    if (status != SMP_OK) {
+        fprintf(stderr, "smp: cannot load playlist: %s\n", smp_status_str(status));
+        goto cleanup;
+    }
+    if (playlist.count == 0) {
+        fprintf(stderr, "smp: no WAV or MP3 files found in %s\n", options->directory);
+        goto cleanup;
+    }
+
+    format.sample_rate = SMP_OUTPUT_RATE;
+    format.channels = SMP_OUTPUT_CHANNELS;
+
+    status = smp_audio_open(options->backend, &device, &format);
+    if (status != SMP_OK) {
+        fprintf(stderr, "smp: cannot open audio output (%s)\n", smp_status_str(status));
+        goto cleanup;
+    }
+
+    player = smp_player_create(&playlist, device);
+    if (player == NULL) {
+        fprintf(stderr, "smp: cannot start the playback engine\n");
+        goto cleanup;
+    }
+
+    smp_ui_set_directory(&ui, options->directory);
+    smp_ui_set_message(&ui, "press space or enter to start", smp_now_ms());
+
+    if (options->render_once) {
+        smp_term_get_size(&width, &height);
+        if (width < 60 || height < 16) {
+            width = 100;
+            height = 30;
+        }
+        if (!smp_frame_begin(&frame, width, height)) {
+            goto cleanup;
+        }
+        render_frame(&frame, &ui, &playlist, player, smp_audio_name(device), &output);
+        smp_term_write(sb_cstr(&output), output.len);
+        smp_term_write("\n", 1);
+        goto cleanup;
+    }
+
+    if (!smp_term_init()) {
+        fprintf(stderr, "smp: standard input is not an interactive terminal\n");
+        goto cleanup;
+    }
+
+    smp_term_get_size(&width, &height);
+    if (!smp_frame_begin(&frame, width, height)) {
+        fprintf(stderr, "smp: cannot allocate the render buffer\n");
+        goto cleanup;
+    }
+
+    smp_term_write("\x1b[?25l", 6); /* hide the cursor */
+
+    while (running) {
+        SmpKey key;
+        uint64_t now = smp_now_ms();
+        int timeout = SMP_FRAME_INTERVAL_MS;
+
+        if (smp_term_poll(&key, timeout)) {
+            handle_key(key, &ui, &playlist, player, &running, options);
+        }
+
+        if (smp_player_take_finished(player)) {
+            SmpPlayerSnapshot snapshot;
+
+            smp_player_snapshot(player, &snapshot);
+            if (snapshot.state == SMP_PLAYER_ERROR) {
+                smp_ui_set_message(&ui, "cannot play this track", smp_now_ms());
+            } else if (snapshot.track_index + 1u < playlist.count) {
+                SmpTrack *next = &playlist.tracks[snapshot.track_index + 1u];
+
+                SMP_UNUSED(next);
+                smp_playlist_select(&playlist, snapshot.track_index + 1u);
+                ui.selection = snapshot.track_index + 1u;
+                smp_player_play(player, snapshot.track_index + 1u);
+            } else {
+                smp_ui_set_message(&ui, "end of playlist", smp_now_ms());
             }
         }
 
-        msleep(50);
-    }
-
-    return NULL;
-}
-
-int main(int argc, char* argv[]) {
-    if (argc < 2) {
-        printf("Usage: %s <music_directory>\n", argv[0]);
-        return 1;
-    }
-
-    signal(SIGWINCH, handle_resize);
-
-    if (pthread_mutex_init(&draw_mutex, NULL) != 0 || pthread_mutex_init(&audio_mutex, NULL) != 0) {
-        printf("Mutex init failed\n");
-        return 1;
-    }
-
-    strncpy(music_directory, argv[1], sizeof(music_directory) - 1);
-    music_directory[sizeof(music_directory) - 1] = '\0';
-
-    update_terminal_size();
-
-    if (TERM_WIDTH < MIN_WIDTH || TERM_HEIGHT < MIN_HEIGHT) {
-        printf("Terminal too small. Minimum: %dx%d, Current: %dx%d\n",
-               MIN_WIDTH,
-               MIN_HEIGHT,
-               TERM_WIDTH,
-               TERM_HEIGHT);
-        return 1;
-    }
-
-    if (!check_tiv_available()) {
-        printf("Warning: tiv not found. Install with: sudo pacman -S tiv\n");
-    }
-
-    printf("Initializing audio system...\n");
-    if (init_audio_system() != 0) {
-        printf("Failed to initialize audio system\n");
-        return 1;
-    }
-
-    enable_raw_mode();
-
-    printf("Loading playlist...\n");
-    load_playlist(argv[1]);
-
-    if (playlist.count == 0) {
-        printf("No tracks loaded. Exiting.\n");
-        disable_raw_mode();
-        return 1;
-    }
-
-    if (pthread_create(&audio_thread, NULL, audio_thread_function, NULL) != 0) {
-        printf("Failed to create audio thread\n");
-        disable_raw_mode();
-        return 1;
-    }
-
-    printf("SwagMusicPlayer started. Loaded %d tracks.\n", playlist.count);
-    printf("Volume: %d%%\n", current_volume);
-    printf("Press any key to continue...");
-    getchar();
-
-    draw_interface();
-
-    while (audio_thread_running) {
-        handle_input();
-
-        if (resize_flag) {
-            resize_flag = 0;
-            draw_interface();
+        if (smp_term_take_resize()) {
+            smp_term_get_size(&width, &height);
+            (void)smp_frame_begin(&frame, width, height);
+            next_frame = 0;
         }
 
-        msleep(50);
+        if (now >= next_frame) {
+            next_frame = now + SMP_FRAME_INTERVAL_MS;
+            render_frame(&frame, &ui, &playlist, player, smp_audio_name(device), &output);
+            smp_term_write(sb_cstr(&output), output.len);
+        }
     }
 
-    pthread_join(audio_thread, NULL);
-    if (playback_thread_running) {
-        playback_thread_running = 0;
-        pthread_join(playback_thread, NULL);
+cleanup:
+    if (player != NULL) {
+        smp_player_destroy(player);
     }
-
-    disable_raw_mode();
-    cleanup_audio_system();
-
-    if (playlist.tracks) {
-        free(playlist.tracks);
-    }
-
-    pthread_mutex_destroy(&draw_mutex);
-    pthread_mutex_destroy(&audio_mutex);
-
-    clear_screen();
-    printf("SMP closed. Thank you for using!\n");
-
+    smp_audio_close(device);
+    smp_term_shutdown();
+    smp_frame_free(&frame);
+    sb_free(&output);
+    smp_ui_free(&ui);
+    smp_playlist_free(&playlist);
     return 0;
 }
+
+static int smp_main_entry(int argc, char **argv)
+{
+    Options options;
+
+    if (!parse_options(argc, argv, &options)) {
+        print_usage(argv[0]);
+        return 2;
+    }
+
+    if (options.list_devices) {
+        smp_audio_list_devices();
+        return 0;
+    }
+
+    if (options.directory == NULL) {
+        fprintf(stderr, "smp: no music directory given\n\n");
+        print_usage(argv[0]);
+        return 2;
+    }
+
+    return run_application(&options);
+}
+
+#ifdef _WIN32
+int wmain(int argc, wchar_t **wide_argv)
+{
+    char **argv;
+    int index;
+    int result;
+
+    argv = (char **)calloc((size_t)argc + 1u, sizeof(char *));
+    if (argv == NULL) {
+        return 1;
+    }
+
+    for (index = 0; index < argc; index++) {
+        argv[index] = smp_wide_to_utf8(wide_argv[index]);
+        if (argv[index] == NULL) {
+            argv[index] = smp_strdup("");
+        }
+    }
+
+    result = smp_main_entry(argc, argv);
+
+    for (index = 0; index < argc; index++) {
+        free(argv[index]);
+    }
+    free(argv);
+    return result;
+}
+#else
+int main(int argc, char **argv)
+{
+    return smp_main_entry(argc, argv);
+}
+#endif

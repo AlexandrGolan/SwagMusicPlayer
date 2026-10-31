@@ -1,292 +1,267 @@
-#include "playlist.h"
+/*
+ * SMP - Swag Music Player
+ * Playlist model: scanning, ordering and navigation.
+ *
+ * SPDX-License-Identifier: MIT
+ */
+#include "smp/playlist.h"
 
-#include <dirent.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <strings.h>
-#include <taglib/tag_c.h>
 
-#include "audio.h"
-#include "ui.h"
+#include "smp/fs.h"
+#include "smp/media.h"
+#include "smp/str.h"
+#include "smp/tags.h"
 
-void load_playlist(const char* directory) {
-    DIR* dir;
-    struct dirent* entry;
-    int track_count = 0;
+void smp_playlist_init(Playlist *playlist)
+{
+    if (playlist == NULL) {
+        return;
+    }
+    playlist->tracks = NULL;
+    playlist->count = 0;
+    playlist->capacity = 0;
+    playlist->current = 0;
+}
 
-    dir = opendir(directory);
+static void free_track(SmpTrack *track)
+{
+    free(track->path);
+    free(track->title);
+    free(track->artist);
+    free(track->album);
+    track->path = NULL;
+    track->title = NULL;
+    track->artist = NULL;
+    track->album = NULL;
+}
+
+void smp_playlist_free(Playlist *playlist)
+{
+    size_t index;
+
+    if (playlist == NULL) {
+        return;
+    }
+
+    for (index = 0; index < playlist->count; index++) {
+        free_track(&playlist->tracks[index]);
+    }
+    free(playlist->tracks);
+    playlist->tracks = NULL;
+    playlist->count = 0;
+    playlist->capacity = 0;
+    playlist->current = 0;
+}
+
+static bool reserve(Playlist *playlist, size_t needed)
+{
+    size_t capacity;
+    SmpTrack *grown;
+
+    if (needed <= playlist->capacity) {
+        return true;
+    }
+
+    capacity = playlist->capacity > 0 ? playlist->capacity : 16u;
+    while (capacity < needed) {
+        capacity *= 2u;
+    }
+
+    grown = (SmpTrack *)realloc(playlist->tracks, capacity * sizeof(SmpTrack));
+    if (grown == NULL) {
+        return false;
+    }
+
+    playlist->tracks = grown;
+    playlist->capacity = capacity;
+    return true;
+}
+
+/* Adds one file to the playlist. Returns false on allocation failure. */
+static bool append_track(Playlist *playlist, const char *path)
+{
+    SmpTags tags;
+    SmpMedia *media = NULL;
+    SmpTrack *track;
+
+    if (!reserve(playlist, playlist->count + 1u)) {
+        return false;
+    }
+
+    track = &playlist->tracks[playlist->count];
+    memset(track, 0, sizeof(*track));
+
+    track->path = smp_strdup(path);
+    if (track->path == NULL) {
+        return false;
+    }
+
+    if (smp_tags_read_file(path, &tags) == SMP_OK) {
+        track->title = smp_strdup(tags.title);
+        track->artist = smp_strdup(tags.artist);
+        track->album = smp_strdup(tags.album);
+    }
+
+    if (track->title == NULL) {
+        const char *base = smp_path_basename(path);
+        const char *dot = smp_path_extension(path);
+        size_t length = dot != NULL ? (size_t)(dot - base) : strlen(base);
+
+        track->title = smp_strdup_n(base, length);
+    }
+    if (track->artist == NULL) {
+        track->artist = smp_strdup("Unknown artist");
+    }
+    if (track->album == NULL) {
+        track->album = smp_strdup("Unknown album");
+    }
+
+    if (track->title == NULL || track->artist == NULL || track->album == NULL) {
+        free_track(track);
+        return false;
+    }
+
+    if (smp_media_open(path, &media) == SMP_OK) {
+        track->duration = smp_media_duration(media);
+        smp_media_close(media);
+    }
+
+    playlist->count++;
+    return true;
+}
+
+static int compare_tracks(const void *left, const void *right)
+{
+    const SmpTrack *a = (const SmpTrack *)left;
+    const SmpTrack *b = (const SmpTrack *)right;
+
+    return smp_strnatcmp(smp_path_basename(a->path), smp_path_basename(b->path));
+}
+
+void smp_playlist_sort(Playlist *playlist)
+{
+    if (playlist == NULL || playlist->count < 2u) {
+        return;
+    }
+    qsort(playlist->tracks, playlist->count, sizeof(SmpTrack), compare_tracks);
+}
+
+SmpStatus smp_playlist_load(Playlist *playlist, const char *directory)
+{
+    SmpDir *dir;
+    SmpDirEntry entry;
+    SmpStatus status = SMP_OK;
+
+    if (playlist == NULL || directory == NULL) {
+        return SMP_ERR_INVALID_ARG;
+    }
+
+    smp_playlist_free(playlist);
+
+    if (!smp_path_is_dir(directory)) {
+        return SMP_ERR_NOT_FOUND;
+    }
+
+    dir = smp_dir_open(directory);
     if (dir == NULL) {
+        return SMP_ERR_IO;
+    }
+
+    while (smp_dir_next(dir, &entry)) {
+        char *full;
+
+        if (entry.is_dir || !smp_media_supported(entry.name)) {
+            continue;
+        }
+
+        full = smp_path_join(directory, entry.name);
+        if (full == NULL) {
+            status = SMP_ERR_OUT_OF_MEMORY;
+            break;
+        }
+
+        if (!append_track(playlist, full)) {
+            free(full);
+            status = SMP_ERR_OUT_OF_MEMORY;
+            break;
+        }
+        free(full);
+    }
+
+    smp_dir_close(dir);
+
+    if (status != SMP_OK) {
+        smp_playlist_free(playlist);
+        return status;
+    }
+
+    smp_playlist_sort(playlist);
+    playlist->current = 0;
+    return SMP_OK;
+}
+
+const SmpTrack *smp_playlist_at(const Playlist *playlist, size_t index)
+{
+    if (playlist == NULL || index >= playlist->count) {
+        return NULL;
+    }
+    return &playlist->tracks[index];
+}
+
+const SmpTrack *smp_playlist_current(const Playlist *playlist)
+{
+    if (playlist == NULL || playlist->count == 0) {
+        return NULL;
+    }
+    return smp_playlist_at(playlist, playlist->current);
+}
+
+bool smp_playlist_advance(Playlist *playlist)
+{
+    if (playlist == NULL || playlist->count == 0) {
+        return false;
+    }
+    if (playlist->current + 1u >= playlist->count) {
+        return false;
+    }
+    playlist->current++;
+    return true;
+}
+
+bool smp_playlist_rewind(Playlist *playlist)
+{
+    if (playlist == NULL || playlist->count == 0) {
+        return false;
+    }
+    if (playlist->current == 0) {
+        return false;
+    }
+    playlist->current--;
+    return true;
+}
+
+void smp_playlist_select(Playlist *playlist, size_t index)
+{
+    if (playlist == NULL || playlist->count == 0) {
+        return;
+    }
+    playlist->current = index < playlist->count ? index : playlist->count - 1u;
+}
+
+void smp_playlist_move(Playlist *playlist, int delta)
+{
+    long long target;
+
+    if (playlist == NULL || playlist->count == 0) {
         return;
     }
 
-    while ((entry = readdir(dir)) != NULL) {
-        const char* ext = strrchr(entry->d_name, '.');
-        if (ext && (strcasecmp(ext, ".mp3") == 0 || strcasecmp(ext, ".wav") == 0)) {
-            track_count++;
-        }
+    target = (long long)playlist->current + delta;
+    while (target < 0) {
+        target += (long long)playlist->count;
     }
-    closedir(dir);
-
-    if (track_count == 0) {
-        printf("No audio files found\n");
-        exit(1);
-    }
-
-    playlist.tracks = malloc(track_count * sizeof(Track));
-    if (playlist.tracks == NULL) {
-        exit(1);
-    }
-    playlist.count = 0;
-
-    dir = opendir(directory);
-    while ((entry = readdir(dir)) != NULL) {
-        const char* ext = strrchr(entry->d_name, '.');
-        if (ext && (strcasecmp(ext, ".mp3") == 0 || strcasecmp(ext, ".wav") == 0)) {
-            char fullpath[1024];
-            snprintf(fullpath, sizeof(fullpath), "%s/%s", directory, entry->d_name);
-
-            if (playlist.count < track_count) {
-                Track* track = &playlist.tracks[playlist.count];
-                strncpy(track->filename, fullpath, sizeof(track->filename) - 1);
-                track->filename[sizeof(track->filename) - 1] = '\0';
-                get_audio_info(fullpath, track);
-                playlist.count++;
-            }
-        }
-    }
-    closedir(dir);
-
-    playlist.current = 0;
-    playlist.playing = 0;
-    playlist.position = 0;
-}
-
-void get_audio_info(const char* filename, Track* track) {
-    TagLib_File* file;
-    TagLib_Tag* tag;
-    const TagLib_AudioProperties* properties;
-
-    file = taglib_file_new(filename);
-
-    if (file != NULL) {
-        tag = taglib_file_tag(file);
-
-        if (tag != NULL) {
-            const char* title = taglib_tag_title(tag);
-            const char* artist = taglib_tag_artist(tag);
-            const char* album = taglib_tag_album(tag);
-
-            if (title != NULL && strlen(title) > 0) {
-                strncpy(track->title, title, sizeof(track->title) - 1);
-                track->title[sizeof(track->title) - 1] = '\0';
-            } else {
-                const char* basename = strrchr(filename, '/');
-                basename = basename ? basename + 1 : filename;
-                strncpy(track->title, basename, sizeof(track->title) - 1);
-                track->title[sizeof(track->title) - 1] = '\0';
-
-                char* dot = strrchr(track->title, '.');
-                if (dot) {
-                    *dot = '\0';
-                }
-            }
-
-            if (artist != NULL && strlen(artist) > 0) {
-                strncpy(track->author, artist, sizeof(track->author) - 1);
-                track->author[sizeof(track->author) - 1] = '\0';
-            } else {
-                strncpy(track->author, "Unknown", sizeof(track->author) - 1);
-            }
-
-            if (album != NULL && strlen(album) > 0) {
-                strncpy(track->album, album, sizeof(track->album) - 1);
-                track->album[sizeof(track->album) - 1] = '\0';
-            } else {
-                strncpy(track->album, "Unknown", sizeof(track->album) - 1);
-            }
-
-            taglib_tag_free_strings();
-        }
-
-        properties = taglib_file_audioproperties(file);
-        if (properties != NULL) {
-            track->duration = taglib_audioproperties_length(properties);
-        } else {
-            track->duration = get_audio_duration(filename);
-        }
-
-        taglib_file_free(file);
-    } else {
-        const char* basename = strrchr(filename, '/');
-        basename = basename ? basename + 1 : filename;
-        strncpy(track->title, basename, sizeof(track->title) - 1);
-        track->title[sizeof(track->title) - 1] = '\0';
-
-        char* dot = strrchr(track->title, '.');
-        if (dot) {
-            *dot = '\0';
-        }
-
-        strncpy(track->author, "Unknown", sizeof(track->author) - 1);
-        strncpy(track->album, "Unknown", sizeof(track->album) - 1);
-
-        track->duration = get_audio_duration(filename);
-    }
-
-    const char* ext = strrchr(filename, '.');
-    if (ext) {
-        if (strcasecmp(ext, ".mp3") == 0) {
-            track->file_type = 1;
-        } else {
-            track->file_type = 0;
-        }
-    }
-
-    track->time_remaining = track->duration;
-}
-
-int get_audio_duration(const char* filename) {
-    TagLib_File* file;
-    const TagLib_AudioProperties* properties;
-    int duration = 180;
-
-    file = taglib_file_new(filename);
-
-    if (file != NULL) {
-        properties = taglib_file_audioproperties(file);
-        if (properties != NULL) {
-            duration = taglib_audioproperties_length(properties);
-        }
-        taglib_file_free(file);
-
-        if (duration > 0) {
-            return duration;
-        }
-    }
-
-    SF_INFO sfinfo;
-    memset(&sfinfo, 0, sizeof(sfinfo));
-    SNDFILE* sndfile = sf_open(filename, SFM_READ, &sfinfo);
-    if (sndfile) {
-        double duration_d = (double)sfinfo.frames / sfinfo.samplerate;
-        sf_close(sndfile);
-        return (int)(duration_d + 0.5);
-    }
-
-    mpg123_handle* mh = mpg123_new(NULL, NULL);
-    if (mh && mpg123_open(mh, filename) == MPG123_OK) {
-        off_t length;
-        mpg123_seek(mh, 0, SEEK_END);
-        length = mpg123_tell(mh);
-        mpg123_seek(mh, 0, SEEK_SET);
-
-        long rate;
-        int channels, encoding;
-        mpg123_getformat(mh, &rate, &channels, &encoding);
-
-        double duration_d = 0.0;
-        if (rate > 0) {
-            duration_d = (double)length / rate;
-        }
-
-        mpg123_close(mh);
-        mpg123_delete(mh);
-        return (int)(duration_d + 0.5);
-    }
-
-    if (mh) {
-        mpg123_delete(mh);
-    }
-
-    return 180;
-}
-
-void next_track() {
-    if (playlist.current < playlist.count - 1) {
-        playlist.current++;
-        playlist.position = 0;
-        stop_playback();
-
-        if (playlist.current < playlist.count) {
-            Track* current_track = &playlist.tracks[playlist.current];
-            current_track->time_remaining = current_track->duration;
-        }
-        playlist.playing = 0;
-
-        update_playlist_offset();
-
-        draw_track_list_only();
-        draw_status_only();
-    }
-}
-
-void prev_track() {
-    if (playlist.current > 0) {
-        playlist.current--;
-        playlist.position = 0;
-        stop_playback();
-
-        if (playlist.current < playlist.count) {
-            Track* current_track = &playlist.tracks[playlist.current];
-            current_track->time_remaining = current_track->duration;
-        }
-        playlist.playing = 0;
-
-        update_playlist_offset();
-
-        draw_track_list_only();
-        draw_status_only();
-    }
-}
-
-void toggle_pause() {
-    if (playback_thread_running) {
-        playlist.playing = !playlist.playing;
-        draw_status_only();
-    } else if (playlist.count > 0) {
-        playlist.playing = 1;
-        start_playback();
-        draw_interface();
-    }
-}
-
-void start_playback() {
-    if (playlist.count == 0 || playlist.current >= playlist.count) {
-        return;
-    }
-
-    stop_playback();
-
-    Track* current_track = &playlist.tracks[playlist.current];
-
-    playback_thread_running = 1;
-
-    if (pthread_create(&playback_thread, NULL, playback_thread_function, (void*)current_track->filename) != 0)
-    {
-        playback_thread_running = 0;
-        return;
-    }
-
-    playlist.playing = 1;
-    playlist.position = 0;
-    playback_start_time = time(NULL);
-    current_track->time_remaining = current_track->duration;
-}
-
-void auto_next_track() {
-    if (playlist.current < playlist.count - 1) {
-        playlist.current++;
-        playlist.position = 0;
-        if (playlist.playing) {
-            start_playback();
-        }
-        draw_track_list_only();
-        draw_status_only();
-    } else {
-        playlist.playing = 0;
-        playlist.position = 0;
-        stop_playback();
-        draw_status_only();
-    }
+    target %= (long long)playlist->count;
+    playlist->current = (size_t)target;
 }
