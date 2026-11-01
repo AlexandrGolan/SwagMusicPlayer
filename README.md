@@ -1,4 +1,4 @@
-﻿# SMP вЂ” Swag Music Player
+﻿# SMP-Swag Music Player
 
 Terminal music player written entirely in C (C17). Plays WAV, MP3, FLAC and
 Ogg Vorbis files and shows the album cover, a seven band spectrum analyser and
