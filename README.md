@@ -1,11 +1,10 @@
-<img width="1917" height="1032" alt="изображение" src="https://github.com/user-attachments/assets/56bb52be-de25-49ba-90d7-10914ef373bc" /># SMP — Swag Music Player
+# SMP — Swag Music Player
 
 Terminal music player written entirely in C (C17). Plays WAV, MP3, FLAC and
 Ogg Vorbis files and shows the album cover, a seven band spectrum analyser and
 the playlist in a single terminal window.
 
-![SMP](<img width="1917" height="1032" alt="изображение" src="https://github.com/user-attachments/assets/aa8a2b0b-5703-42fe-a961-30245050c08d" />
-)
+![SMP](docs/screenshot.png)
 
 ## Features
 
