@@ -113,7 +113,9 @@ void smp_term_shutdown(void)
     }
 
     if (tty_available) {
-        (void)write(STDOUT_FILENO, cleanups, strlen(cleanups));
+        ssize_t ignored = write(STDOUT_FILENO, cleanups, strlen(cleanups));
+
+        (void)ignored;
     }
 }
 
