@@ -1,4 +1,4 @@
-/*
+﻿/*
  * SMP - Swag Music Player
  * Third party single-header libraries (implementation units).
  *
@@ -23,6 +23,17 @@
 
 #define DR_MP3_IMPLEMENTATION
 #include "dr_mp3.h"
+
+#define DR_FLAC_IMPLEMENTATION
+#include "dr_flac.h"
+
+/* stb_vorbis is a single .c file that carries its own declarations. */
+#include "stb_vorbis.c"
+
+/* stb_vorbis leaks an internal `L` macro that collides with stb_image. */
+#ifdef L
+#undef L
+#endif
 
 #define STBI_ONLY_PNG
 #define STBI_ONLY_JPEG

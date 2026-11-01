@@ -1,4 +1,4 @@
-/*
+﻿/*
  * SMP - Swag Music Player
  * Tests for the playback engine (with the silent backend).
  *
@@ -272,10 +272,63 @@ static void test_navigation_and_seek(void)
     smp_test_end();
 }
 
+#ifndef SMP_TEST_DATA_DIR
+#define SMP_TEST_DATA_DIR "tests/data"
+#endif
+
+static void test_plays_flac_and_ogg(void)
+{
+    Playlist playlist;
+    SmpAudioDevice *device = NULL;
+    SmpPlayer *player = NULL;
+    SmpAudioFormat format;
+    SmpPlayerSnapshot snapshot;
+    bool finished = false;
+    int attempts;
+    int tracks;
+
+    smp_test_begin("player decodes flac and ogg end to end");
+
+    smp_playlist_init(&playlist);
+    SMP_CHECK_INT(smp_playlist_load(&playlist, SMP_TEST_DATA_DIR), SMP_OK);
+    SMP_CHECK_INT(playlist.count, 2);
+
+    format.sample_rate = 48000;
+    format.channels = 2;
+    SMP_CHECK_INT(smp_audio_open("null", &device, &format), SMP_OK);
+
+    player = smp_player_create(&playlist, device);
+    SMP_CHECK(player != NULL);
+
+    if (player != NULL) {
+        for (tracks = 0; tracks < 2; tracks++) {
+            finished = false;
+            smp_player_play(player, (size_t)tracks);
+
+            for (attempts = 0; attempts < 600 && !finished; attempts++) {
+                smp_sleep_ms(5);
+                finished = smp_player_take_finished(player);
+            }
+            SMP_CHECK(finished);
+
+            smp_player_snapshot(player, &snapshot);
+            SMP_CHECK_NEAR(snapshot.duration, 1.0, 0.05);
+            SMP_CHECK(snapshot.position > 0.5);
+            SMP_CHECK_STR(snapshot.title, "Fixture Title");
+        }
+        smp_player_destroy(player);
+    }
+
+    smp_audio_close(device);
+    smp_playlist_free(&playlist);
+    smp_test_end();
+}
+
 void suite_player(void)
 {
     smp_test_suite("player");
     test_state_machine();
     test_plays_to_the_end();
     test_navigation_and_seek();
+    test_plays_flac_and_ogg();
 }

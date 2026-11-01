@@ -639,8 +639,244 @@ static bool stream_riff_tags(FILE *file, SmpTags *tags)
     return found;
 }
 
-static bool has_text(const char *text)
+/* ------------------------------------------------------------------------- */
+/* Vorbis comments (FLAC and Ogg Vorbis)                                     */
+/* ------------------------------------------------------------------------- */
+
+static bool key_equals(const uint8_t *key, size_t length, const char *name)
 {
+    size_t name_length = strlen(name);
+    size_t index;
+
+    if (length != name_length) {
+        return false;
+    }
+
+    for (index = 0; index < length; index++) {
+        char left = (char)key[index];
+        char right = name[index];
+
+        if (left >= 'a' && left <= 'z') {
+            left = (char)(left - 'a' + 'A');
+        }
+        if (right >= 'a' && right <= 'z') {
+            right = (char)(right - 'a' + 'A');
+        }
+        if (left != right) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool parse_vorbis_comments(const uint8_t *data, size_t size, SmpTags *tags)
+{
+    uint32_t vendor_length;
+    uint32_t count;
+    uint32_t index;
+    size_t offset;
+    bool found = false;
+
+    if (data == NULL || tags == NULL || size < 8u) {
+        return false;
+    }
+
+    vendor_length = read_le32(data);
+    offset = 4u + (size_t)vendor_length;
+    if (offset + 4u > size) {
+        return false;
+    }
+
+    count = read_le32(data + offset);
+    offset += 4u;
+
+    for (index = 0; index < count; index++) {
+        uint32_t length;
+        const uint8_t *entry;
+        size_t key_length = 0;
+        StrBuf text;
+
+        if (offset + 4u > size) {
+            break;
+        }
+        length = read_le32(data + offset);
+        offset += 4u;
+        if ((size_t)length > size - offset) {
+            break;
+        }
+
+        entry = data + offset;
+        while (key_length < (size_t)length && entry[key_length] != '=') {
+            key_length++;
+        }
+
+        if (key_length < (size_t)length) {
+            const char *value = (const char *)entry + key_length + 1u;
+            size_t value_length = (size_t)length - key_length - 1u;
+
+            sb_init(&text);
+            if (is_valid_utf8((const uint8_t *)value, value_length)) {
+                (void)sb_append_n(&text, value, value_length);
+            } else {
+                append_cp1251(&text, (const uint8_t *)value, value_length);
+            }
+
+            if (key_equals(entry, key_length, "TITLE")) {
+                assign_field(tags->title, sizeof(tags->title), &text);
+                found = true;
+            } else if (key_equals(entry, key_length, "ARTIST")) {
+                assign_field(tags->artist, sizeof(tags->artist), &text);
+                found = true;
+            } else if (key_equals(entry, key_length, "ALBUM")) {
+                assign_field(tags->album, sizeof(tags->album), &text);
+                found = true;
+            }
+            sb_free(&text);
+        }
+
+        offset += (size_t)length;
+    }
+
+    return found;
+}
+
+/* Reads the FLAC metadata blocks and parses the VORBIS_COMMENT block. */
+static bool parse_flac_metadata(FILE *file, SmpTags *tags)
+{
+    uint8_t marker[4];
+
+    if (fread(marker, 1, sizeof(marker), file) != sizeof(marker)) {
+        return false;
+    }
+    if (memcmp(marker, "fLaC", 4) != 0) {
+        return false;
+    }
+
+    for (;;) {
+        uint8_t header[4];
+        uint8_t type;
+        bool last;
+        uint32_t length;
+
+        if (fread(header, 1, sizeof(header), file) != sizeof(header)) {
+            break;
+        }
+
+        last = (header[0] & 0x80u) != 0;
+        type = (uint8_t)(header[0] & 0x7fu);
+        length = ((uint32_t)header[1] << 16) | ((uint32_t)header[2] << 8) | (uint32_t)header[3];
+
+        if (type == 4u) {
+            uint8_t *payload;
+            bool found;
+
+            if (length > 8u * 1024u * 1024u) {
+                return false;
+            }
+            payload = (uint8_t *)malloc(length);
+            if (payload == NULL) {
+                return false;
+            }
+            if (fread(payload, 1, length, file) != length) {
+                free(payload);
+                return false;
+            }
+            found = parse_vorbis_comments(payload, length, tags);
+            free(payload);
+            return found;
+        }
+
+        if (!skip_bytes(file, length)) {
+            break;
+        }
+        if (last) {
+            break;
+        }
+    }
+
+    return false;
+}
+
+/* Assembles the Ogg packets and parses the "\x03vorbis" comment packet. */
+static bool parse_ogg_comments(FILE *file, SmpTags *tags)
+{
+    const size_t limit = 256u * 1024u;
+    uint8_t *data;
+    uint8_t *packet;
+    size_t size;
+    size_t offset = 0;
+    size_t packet_length = 0;
+    bool found = false;
+
+    data = (uint8_t *)malloc(limit);
+    packet = (uint8_t *)malloc(limit);
+    if (data == NULL || packet == NULL) {
+        free(data);
+        free(packet);
+        return false;
+    }
+
+    size = fread(data, 1, limit, file);
+    if (size < 27u) {
+        free(packet);
+        free(data);
+        return false;
+    }
+
+    while (offset + 27u <= size) {
+        uint8_t header_type;
+        uint8_t segments;
+        size_t table;
+        size_t payload;
+        size_t payload_length = 0;
+        size_t index;
+
+        if (memcmp(data + offset, "OggS", 4) != 0) {
+            break;
+        }
+
+        header_type = data[offset + 5];
+        segments = data[offset + 26];
+        table = offset + 27u;
+        if (table + (size_t)segments > size) {
+            break;
+        }
+
+        for (index = 0; index < (size_t)segments; index++) {
+            payload_length += data[table + index];
+        }
+
+        payload = table + (size_t)segments;
+        if (payload + payload_length > size) {
+            break;
+        }
+
+        if ((header_type & 0x01u) == 0) {
+            packet_length = 0;
+        }
+        if (packet_length + payload_length <= limit) {
+            memcpy(packet + packet_length, data + payload, payload_length);
+            packet_length += payload_length;
+        }
+
+        /* A lacing value below 255 terminates the packet. */
+        if (segments > 0 && data[table + (size_t)segments - 1u] < 255u) {
+            if (packet_length >= 7u && memcmp(packet, "\x03vorbis", 7) == 0) {
+                found = parse_vorbis_comments(packet + 7, packet_length - 7u, tags);
+                break;
+            }
+            packet_length = 0;
+        }
+
+        offset = payload + payload_length;
+    }
+
+    free(packet);
+    free(data);
+    return found;
+}
+
+static bool has_text(const char *text){
     return text != NULL && text[0] != '\0';
 }
 
@@ -665,6 +901,26 @@ SmpStatus smp_tags_read_file(const char *path, SmpTags *tags)
         }
         if (stream_riff_tags(file, tags)) {
             format = SMP_TAG_FORMAT_RIFF_INFO;
+        }
+        fclose(file);
+    } else if (smp_path_has_extension(path, ".flac")) {
+        FILE *file = smp_file_open(path);
+
+        if (file == NULL) {
+            return SMP_ERR_IO;
+        }
+        if (parse_flac_metadata(file, tags)) {
+            format = SMP_TAG_FORMAT_VORBIS_COMMENT;
+        }
+        fclose(file);
+    } else if (smp_path_has_extension(path, ".ogg") || smp_path_has_extension(path, ".oga")) {
+        FILE *file = smp_file_open(path);
+
+        if (file == NULL) {
+            return SMP_ERR_IO;
+        }
+        if (parse_ogg_comments(file, tags)) {
+            format = SMP_TAG_FORMAT_VORBIS_COMMENT;
         }
         fclose(file);
     } else {

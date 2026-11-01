@@ -1,4 +1,4 @@
-/*
+﻿/*
  * SMP - Swag Music Player
  * Common definitions: status codes, small helpers, time utilities.
  *
@@ -12,6 +12,15 @@
 #include <stdint.h>
 
 #define SMP_ARRAY_LEN(array) (sizeof(array) / sizeof((array)[0]))
+
+/* The player assumes 64-bit pointers and 64-bit file offsets. */
+#if defined(SMP_REQUIRE_64BIT)
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
+_Static_assert(sizeof(void *) >= 8, "SMP requires a 64-bit build");
+#else
+#error "SMP requires a 64-bit build"
+#endif
+#endif
 
 #define SMP_MIN(a, b) (((a) < (b)) ? (a) : (b))
 #define SMP_MAX(a, b) (((a) > (b)) ? (a) : (b))

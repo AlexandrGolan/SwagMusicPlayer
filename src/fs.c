@@ -392,26 +392,66 @@ static FILE *open_utf8(const char *path, const char *mode)
 #endif
 }
 
-static SmpStatus read_stream(FILE *file, size_t max_bytes, void **out_data, size_t *out_size)
+/* 64-bit file positioning (long is 32-bit on Windows). */
+static bool file_seek(FILE *file, int64_t offset, int origin)
 {
+#ifdef _WIN32
+    return _fseeki64(file, (__int64)offset, origin) == 0;
+#else
+    return fseeko(file, (off_t)offset, origin) == 0;
+#endif
+}
+
+static int64_t file_tell(FILE *file)
+{
+#ifdef _WIN32
+    return (int64_t)_ftelli64(file);
+#else
+    return (int64_t)ftello(file);
+#endif
+}
+
+static SmpStatus read_stream(FILE *file, size_t max_bytes, void **out_data, size_t *out_size){
     char *buffer;
     size_t capacity;
     size_t used = 0;
 
-    capacity = max_bytes > 0 ? max_bytes : 4096u;
-    if (capacity > (size_t)64 * 1024 * 1024) {
-        capacity = (size_t)64 * 1024 * 1024;
-    }
-
+    capacity = max_bytes > 0 && max_bytes < 65536u ? max_bytes : 65536u;
     buffer = (char *)malloc(capacity + 1u);
     if (buffer == NULL) {
         return SMP_ERR_OUT_OF_MEMORY;
     }
 
-    while (used < capacity) {
-        size_t request = capacity - used;
-        size_t got = fread(buffer + used, 1, request, file);
+    for (;;) {
+        size_t request;
+        size_t got;
 
+        if (used == capacity) {
+            size_t grown_capacity;
+
+            if (max_bytes > 0 && capacity >= max_bytes) {
+                break;
+            }
+
+            grown_capacity = capacity * 2u;
+            if (max_bytes > 0 && grown_capacity > max_bytes) {
+                grown_capacity = max_bytes;
+            }
+
+            {
+                char *grown = (char *)realloc(buffer, grown_capacity + 1u);
+
+                if (grown == NULL) {
+                    free(buffer);
+                    return SMP_ERR_OUT_OF_MEMORY;
+                }
+                buffer = grown;
+                capacity = grown_capacity;
+            }
+        }
+
+        request = capacity - used;
+        got = fread(buffer + used, 1, request, file);
         used += got;
         if (got < request) {
             break;
@@ -454,7 +494,7 @@ SmpStatus smp_file_read(const char *path, size_t max_bytes, void **out_data, siz
 SmpStatus smp_file_read_tail(const char *path, size_t max_bytes, void **out_data, size_t *out_size)
 {
     FILE *file;
-    long size;
+    int64_t size;
     size_t wanted;
     SmpStatus status;
 
@@ -467,11 +507,11 @@ SmpStatus smp_file_read_tail(const char *path, size_t max_bytes, void **out_data
         return SMP_ERR_NOT_FOUND;
     }
 
-    if (fseek(file, 0, SEEK_END) != 0) {
+    if (!file_seek(file, 0, SEEK_END)) {
         fclose(file);
         return SMP_ERR_IO;
     }
-    size = ftell(file);
+    size = file_tell(file);
     if (size < 0) {
         fclose(file);
         return SMP_ERR_IO;
@@ -481,7 +521,7 @@ SmpStatus smp_file_read_tail(const char *path, size_t max_bytes, void **out_data
     if (max_bytes > 0 && wanted > max_bytes) {
         wanted = max_bytes;
     }
-    if (fseek(file, (long)((size_t)size - wanted), SEEK_SET) != 0) {
+    if (!file_seek(file, size - (int64_t)wanted, SEEK_SET)) {
         fclose(file);
         return SMP_ERR_IO;
     }

@@ -1,4 +1,4 @@
-/*
+﻿/*
  * SMP - Swag Music Player
  * Embedded metadata: ID3v2, ID3v1 and RIFF INFO chunks.
  *
@@ -26,6 +26,7 @@ typedef enum {
     SMP_TAG_FORMAT_ID3V2,
     SMP_TAG_FORMAT_ID3V1,
     SMP_TAG_FORMAT_RIFF_INFO,
+    SMP_TAG_FORMAT_VORBIS_COMMENT,
 } SmpTagFormat;
 
 void smp_tags_init(SmpTags *tags);

@@ -374,9 +374,43 @@ static void test_riff_info_after_data(void)
     smp_test_end();
 }
 
+#ifndef SMP_TEST_DATA_DIR
+#define SMP_TEST_DATA_DIR "tests/data"
+#endif
+
+static const char *fixture_path(const char *name)
+{
+    static char path[512];
+
+    snprintf(path, sizeof(path), "%s/%s", SMP_TEST_DATA_DIR, name);
+    return path;
+}
+
+static void test_vorbis_comment_fixtures(void)
+{
+    SmpTags tags;
+
+    smp_test_begin("flac vorbis comments");
+    smp_tags_init(&tags);
+    SMP_CHECK_INT(smp_tags_read_file(fixture_path("sample.flac"), &tags), SMP_OK);
+    SMP_CHECK_STR(tags.title, "Fixture Title");
+    SMP_CHECK_STR(tags.artist, "Fixture Artist");
+    SMP_CHECK_STR(tags.album, "Fixture Album");
+    smp_test_end();
+
+    smp_test_begin("ogg vorbis comments");
+    smp_tags_init(&tags);
+    SMP_CHECK_INT(smp_tags_read_file(fixture_path("sample.ogg"), &tags), SMP_OK);
+    SMP_CHECK_STR(tags.title, "Fixture Title");
+    SMP_CHECK_STR(tags.artist, "Fixture Artist");
+    SMP_CHECK_STR(tags.album, "Fixture Album");
+    smp_test_end();
+}
+
 void suite_tags(void)
 {
     smp_test_suite("tags");
+    test_vorbis_comment_fixtures();
     test_riff_info_after_data();
     test_id3v2_utf8();
     test_id3v2_encodings();

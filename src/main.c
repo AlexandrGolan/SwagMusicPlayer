@@ -19,7 +19,7 @@
 #include "smp/term.h"
 #include "smp/ui.h"
 
-#define SMP_VERSION "2.0.0"
+#define SMP_VERSION "2.1.0"
 #define SMP_FRAME_INTERVAL_MS 80
 
 #ifdef _WIN32

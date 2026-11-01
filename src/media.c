@@ -1,48 +1,74 @@
 /*
  * SMP - Swag Music Player
- * Audio decoding (WAV via dr_wav, MP3 via dr_mp3).
+ * Audio decoding: WAV (dr_wav), MP3 (dr_mp3), FLAC (dr_flac),
+ * Ogg Vorbis (stb_vorbis).
  *
  * SPDX-License-Identifier: MIT
  */
 #include "smp/media.h"
 
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include "dr_flac.h"
 #include "dr_mp3.h"
 #include "dr_wav.h"
+#define STB_VORBIS_HEADER_ONLY
+#include "stb_vorbis.c"
 #include "smp/fs.h"
 #include "smp/tags.h"
 
+#define OGG_MAX_FILE_SIZE ((size_t)256 * 1024 * 1024)
+
 struct SmpMedia {
     SmpMediaKind kind;
-    drwav wav;
-    drmp3 mp3;
+
     int sample_rate;
     int channels;
     double duration;
     uint64_t total_frames;
     uint64_t position;
-    bool seekable;
+
+    union {
+        drwav wav;
+        drmp3 mp3;
+        drflac *flac;
+        stb_vorbis *ogg;
+    } decoder;
+
+    void *ogg_memory; /* stb_vorbis keeps pointers into this buffer */
 };
 
 bool smp_media_supported(const char *path)
 {
-    return smp_path_has_extension(path, ".wav") || smp_path_has_extension(path, ".mp3");
+    return smp_path_has_extension(path, ".wav") || smp_path_has_extension(path, ".mp3")
+           || smp_path_has_extension(path, ".flac") || smp_path_has_extension(path, ".ogg")
+           || smp_path_has_extension(path, ".oga");
 }
 
 const char *smp_media_kind_name(SmpMediaKind kind)
 {
-    return kind == SMP_MEDIA_MP3 ? "MP3" : "WAV";
+    switch (kind) {
+    case SMP_MEDIA_MP3:
+        return "MP3";
+    case SMP_MEDIA_FLAC:
+        return "FLAC";
+    case SMP_MEDIA_OGG:
+        return "OGG";
+    case SMP_MEDIA_WAV:
+    default:
+        return "WAV";
+    }
 }
 
 /* ------------------------------------------------------------------------- */
-/* MPEG frame header parsing                                                 */
+/* MPEG frame header parsing (MP3 duration estimation)                       */
 /* ------------------------------------------------------------------------- */
 
 typedef struct {
-    int version;        /* 1 = MPEG1, 2 = MPEG2, 25 = MPEG2.5 */
+    int version; /* 1 = MPEG1, 2 = MPEG2, 25 = MPEG2.5 */
     int bitrate_kbps;
     int sample_rate;
     int padding;
@@ -52,8 +78,10 @@ typedef struct {
     int side_info_size;
 } Mp3FrameHeader;
 
-static const int mp3_bitrate_v1_layer3[15] = {0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320};
-static const int mp3_bitrate_v2_layer3[15] = {0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160};
+static const int mp3_bitrate_v1_layer3[15]
+    = {0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320};
+static const int mp3_bitrate_v2_layer3[15]
+    = {0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160};
 static const int mp3_sample_rates[3][3] = {
     {44100, 48000, 32000},
     {22050, 24000, 16000},
@@ -86,7 +114,7 @@ static bool mp3_parse_header(const uint8_t *data, size_t size, Mp3FrameHeader *h
 
     version_bits = (second >> 3) & 0x03;
     layer_bits = (second >> 1) & 0x03;
-    if (version_bits == 1 || layer_bits != 1) { /* only Layer III is supported */
+    if (version_bits == 1 || layer_bits != 1) {
         return false;
     }
 
@@ -161,7 +189,6 @@ double smp_mp3_duration_from_header(const uint8_t *data, size_t size, uint64_t f
         return 0.0;
     }
 
-    /* Xing / Info header (variable bitrate) carries the exact frame count. */
     {
         size_t xing_offset = frame_offset + 4u + (size_t)header.side_info_size;
 
@@ -182,7 +209,6 @@ double smp_mp3_duration_from_header(const uint8_t *data, size_t size, uint64_t f
         }
     }
 
-    /* VBRI header written by Fraunhofer encoders. */
     {
         size_t vbri_offset = frame_offset + 4u + 32u;
 
@@ -196,14 +222,12 @@ double smp_mp3_duration_from_header(const uint8_t *data, size_t size, uint64_t f
         }
     }
 
-    /* Constant bitrate estimate from the audio payload size. */
     if (file_size > (uint64_t)frame_offset) {
         uint64_t audio_bytes = file_size - (uint64_t)frame_offset;
-        double bits = (double)audio_bytes * 8.0;
         double bitrate = (double)header.bitrate_kbps * 1000.0;
 
         if (bitrate > 0.0) {
-            return bits / bitrate;
+            return (double)audio_bytes * 8.0 / bitrate;
         }
     }
 
@@ -214,7 +238,7 @@ double smp_mp3_duration_from_header(const uint8_t *data, size_t size, uint64_t f
 /* Opening and decoding                                                      */
 /* ------------------------------------------------------------------------- */
 
-static bool open_wav_file(drwav *wav, const char *path)
+static bool open_wav(SmpMedia *media, const char *path)
 {
 #ifdef _WIN32
     wchar_t *wide = smp_utf8_to_wide(path);
@@ -223,15 +247,15 @@ static bool open_wav_file(drwav *wav, const char *path)
     if (wide == NULL) {
         return false;
     }
-    ok = drwav_init_file_w(wav, wide, NULL);
+    ok = drwav_init_file_w(&media->decoder.wav, wide, NULL);
     free(wide);
     return ok == DRWAV_TRUE;
 #else
-    return drwav_init_file(wav, path, NULL) == DRWAV_TRUE;
+    return drwav_init_file(&media->decoder.wav, path, NULL) == DRWAV_TRUE;
 #endif
 }
 
-static bool open_mp3_file(drmp3 *mp3, const char *path)
+static bool open_mp3(SmpMedia *media, const char *path)
 {
 #ifdef _WIN32
     wchar_t *wide = smp_utf8_to_wide(path);
@@ -240,12 +264,53 @@ static bool open_mp3_file(drmp3 *mp3, const char *path)
     if (wide == NULL) {
         return false;
     }
-    ok = drmp3_init_file_w(mp3, wide, NULL);
+    ok = drmp3_init_file_w(&media->decoder.mp3, wide, NULL);
     free(wide);
     return ok == DRMP3_TRUE;
 #else
-    return drmp3_init_file(mp3, path, NULL) == DRMP3_TRUE;
+    return drmp3_init_file(&media->decoder.mp3, path, NULL) == DRMP3_TRUE;
 #endif
+}
+
+static bool open_flac(SmpMedia *media, const char *path)
+{
+#ifdef _WIN32
+    wchar_t *wide = smp_utf8_to_wide(path);
+
+    if (wide == NULL) {
+        return false;
+    }
+    media->decoder.flac = drflac_open_file_w(wide, NULL);
+    free(wide);
+#else
+    media->decoder.flac = drflac_open_file(path, NULL);
+#endif
+    return media->decoder.flac != NULL;
+}
+
+static bool open_ogg(SmpMedia *media, const char *path)
+{
+    void *data = NULL;
+    size_t size = 0;
+    int error = 0;
+
+    if (smp_file_read(path, OGG_MAX_FILE_SIZE, &data, &size) != SMP_OK || size == 0) {
+        free(data);
+        return false;
+    }
+    if (size > (size_t)INT_MAX) {
+        free(data);
+        return false;
+    }
+
+    media->decoder.ogg = stb_vorbis_open_memory((const unsigned char *)data, (int)size, &error, NULL);
+    if (media->decoder.ogg == NULL) {
+        free(data);
+        return false;
+    }
+
+    media->ogg_memory = data;
+    return true;
 }
 
 SmpStatus smp_media_open(const char *path, SmpMedia **out_media)
@@ -264,32 +329,25 @@ SmpStatus smp_media_open(const char *path, SmpMedia **out_media)
 
     if (smp_path_has_extension(path, ".wav")) {
         media->kind = SMP_MEDIA_WAV;
-        if (!open_wav_file(&media->wav, path)) {
+        if (!open_wav(media, path)) {
             free(media);
             return SMP_ERR_DECODE;
         }
-
-        media->sample_rate = (int)media->wav.sampleRate;
-        media->channels = (int)media->wav.channels;
-        media->total_frames = media->wav.totalPCMFrameCount;
-        if (media->sample_rate > 0) {
-            media->duration = (double)media->total_frames / (double)media->sample_rate;
-        }
-        media->seekable = true;
+        media->sample_rate = (int)media->decoder.wav.sampleRate;
+        media->channels = (int)media->decoder.wav.channels;
+        media->total_frames = media->decoder.wav.totalPCMFrameCount;
     } else if (smp_path_has_extension(path, ".mp3")) {
         void *buffer = NULL;
         size_t buffer_size = 0;
         uint64_t file_size = 0;
 
         media->kind = SMP_MEDIA_MP3;
-        if (!open_mp3_file(&media->mp3, path)) {
+        if (!open_mp3(media, path)) {
             free(media);
             return SMP_ERR_DECODE;
         }
-
-        media->sample_rate = (int)media->mp3.sampleRate;
-        media->channels = (int)media->mp3.channels;
-        media->seekable = true;
+        media->sample_rate = (int)media->decoder.mp3.sampleRate;
+        media->channels = (int)media->decoder.mp3.channels;
 
         (void)smp_file_size(path, &file_size);
         if (smp_file_read(path, 256u * 1024u, &buffer, &buffer_size) == SMP_OK) {
@@ -298,8 +356,28 @@ SmpStatus smp_media_open(const char *path, SmpMedia **out_media)
                                                            file_size);
             free(buffer);
         }
+    } else if (smp_path_has_extension(path, ".flac")) {
+        media->kind = SMP_MEDIA_FLAC;
+        if (!open_flac(media, path)) {
+            free(media);
+            return SMP_ERR_DECODE;
+        }
+        media->sample_rate = (int)media->decoder.flac->sampleRate;
+        media->channels = (int)media->decoder.flac->channels;
+        media->total_frames = media->decoder.flac->totalPCMFrameCount;
+    } else if (smp_path_has_extension(path, ".ogg") || smp_path_has_extension(path, ".oga")) {
+        stb_vorbis_info info;
 
-        if (media->duration > 0.0 && media->sample_rate > 0) {
+        media->kind = SMP_MEDIA_OGG;
+        if (!open_ogg(media, path)) {
+            free(media);
+            return SMP_ERR_DECODE;
+        }
+        info = stb_vorbis_get_info(media->decoder.ogg);
+        media->sample_rate = (int)info.sample_rate;
+        media->channels = (int)info.channels;
+        media->duration = (double)stb_vorbis_stream_length_in_seconds(media->decoder.ogg);
+        if (media->duration > 0.0) {
             media->total_frames = (uint64_t)(media->duration * (double)media->sample_rate);
         }
     } else {
@@ -312,6 +390,10 @@ SmpStatus smp_media_open(const char *path, SmpMedia **out_media)
         return SMP_ERR_DECODE;
     }
 
+    if (media->duration <= 0.0 && media->total_frames > 0 && media->sample_rate > 0) {
+        media->duration = (double)media->total_frames / (double)media->sample_rate;
+    }
+
     *out_media = media;
     return SMP_OK;
 }
@@ -322,11 +404,26 @@ void smp_media_close(SmpMedia *media)
         return;
     }
 
-    if (media->kind == SMP_MEDIA_WAV) {
-        drwav_uninit(&media->wav);
-    } else {
-        drmp3_uninit(&media->mp3);
+    switch (media->kind) {
+    case SMP_MEDIA_WAV:
+        drwav_uninit(&media->decoder.wav);
+        break;
+    case SMP_MEDIA_MP3:
+        drmp3_uninit(&media->decoder.mp3);
+        break;
+    case SMP_MEDIA_FLAC:
+        if (media->decoder.flac != NULL) {
+            drflac_close(media->decoder.flac);
+        }
+        break;
+    case SMP_MEDIA_OGG:
+        if (media->decoder.ogg != NULL) {
+            stb_vorbis_close(media->decoder.ogg);
+        }
+        break;
     }
+
+    free(media->ogg_memory);
     free(media);
 }
 
@@ -368,10 +465,22 @@ size_t smp_media_read(SmpMedia *media, int16_t *frames, size_t max_frames)
         return 0;
     }
 
-    if (media->kind == SMP_MEDIA_WAV) {
-        read = drwav_read_pcm_frames_s16(&media->wav, (drwav_uint64)max_frames, frames);
-    } else {
-        read = drmp3_read_pcm_frames_s16(&media->mp3, (drmp3_uint64)max_frames, frames);
+    switch (media->kind) {
+    case SMP_MEDIA_WAV:
+        read = drwav_read_pcm_frames_s16(&media->decoder.wav, (drwav_uint64)max_frames, frames);
+        break;
+    case SMP_MEDIA_MP3:
+        read = drmp3_read_pcm_frames_s16(&media->decoder.mp3, (drmp3_uint64)max_frames, frames);
+        break;
+    case SMP_MEDIA_FLAC:
+        read = drflac_read_pcm_frames_s16(media->decoder.flac, (drflac_uint64)max_frames, frames);
+        break;
+    case SMP_MEDIA_OGG:
+        read = (uint64_t)stb_vorbis_get_frame_short_interleaved(media->decoder.ogg,
+                                                                media->channels,
+                                                                frames,
+                                                                (int)(max_frames * (size_t)media->channels));
+        break;
     }
 
     media->position += read;
@@ -380,16 +489,25 @@ size_t smp_media_read(SmpMedia *media, int16_t *frames, size_t max_frames)
 
 bool smp_media_seek(SmpMedia *media, uint64_t frame)
 {
-    bool ok;
+    bool ok = false;
 
-    if (media == NULL || !media->seekable) {
+    if (media == NULL) {
         return false;
     }
 
-    if (media->kind == SMP_MEDIA_WAV) {
-        ok = drwav_seek_to_pcm_frame(&media->wav, (drwav_uint64)frame) == DRWAV_TRUE;
-    } else {
-        ok = drmp3_seek_to_pcm_frame(&media->mp3, (drmp3_uint64)frame) == DRMP3_TRUE;
+    switch (media->kind) {
+    case SMP_MEDIA_WAV:
+        ok = drwav_seek_to_pcm_frame(&media->decoder.wav, (drwav_uint64)frame) == DRWAV_TRUE;
+        break;
+    case SMP_MEDIA_MP3:
+        ok = drmp3_seek_to_pcm_frame(&media->decoder.mp3, (drmp3_uint64)frame) == DRMP3_TRUE;
+        break;
+    case SMP_MEDIA_FLAC:
+        ok = drflac_seek_to_pcm_frame(media->decoder.flac, (drflac_uint64)frame) == DRFLAC_TRUE;
+        break;
+    case SMP_MEDIA_OGG:
+        ok = stb_vorbis_seek(media->decoder.ogg, (unsigned int)frame) != 0;
+        break;
     }
 
     if (ok) {

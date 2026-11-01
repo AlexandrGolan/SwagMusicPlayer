@@ -1,4 +1,4 @@
-/*
+﻿/*
  * SMP - Swag Music Player
  * Tests for audio decoding and MP3 header parsing.
  *
@@ -100,13 +100,71 @@ static void test_unsupported(void)
 {
     SmpMedia *media = NULL;
 
-    smp_test_begin("unsupported and missing files");
+    smp_test_begin("supported and missing files");
     SMP_CHECK(smp_media_supported("track.mp3"));
     SMP_CHECK(smp_media_supported("track.WAV"));
-    SMP_CHECK(!smp_media_supported("track.flac"));
+    SMP_CHECK(smp_media_supported("track.flac"));
+    SMP_CHECK(smp_media_supported("track.ogg"));
+    SMP_CHECK(!smp_media_supported("track.opus"));
 
-    SMP_CHECK_INT(smp_media_open("smp_test_missing.flac", &media), SMP_ERR_UNSUPPORTED);
+    SMP_CHECK_INT(smp_media_open("smp_test_missing.flac", &media), SMP_ERR_DECODE);
     SMP_CHECK_INT(smp_media_open("smp_test_missing.wav", &media), SMP_ERR_DECODE);
+    SMP_CHECK_INT(smp_media_open("smp_test_missing.opus", &media), SMP_ERR_UNSUPPORTED);
+    smp_test_end();
+}
+
+#ifndef SMP_TEST_DATA_DIR
+#define SMP_TEST_DATA_DIR "tests/data"
+#endif
+
+static const char *fixture(const char *name)
+{
+    static char path[512];
+
+    snprintf(path, sizeof(path), "%s/%s", SMP_TEST_DATA_DIR, name);
+    return path;
+}
+
+static void decode_fixture(const char *name, SmpMediaKind expected_kind, const char *kind_name)
+{
+    SmpMedia *media = NULL;
+    int16_t buffer[2 * 512];
+    size_t read;
+
+    smp_test_begin(name);
+    SMP_CHECK_INT(smp_media_open(fixture(name), &media), SMP_OK);
+
+    if (media != NULL) {
+        SMP_CHECK_INT(smp_media_kind(media), expected_kind);
+        SMP_CHECK_STR(smp_media_kind_name(expected_kind), kind_name);
+        SMP_CHECK_INT(smp_media_sample_rate(media), 48000);
+        SMP_CHECK_INT(smp_media_channels(media), 2);
+        SMP_CHECK_INT(smp_media_total_frames(media), 48000);
+        SMP_CHECK_NEAR(smp_media_duration(media), 1.0, 0.05);
+
+        read = smp_media_read(media, buffer, 512);
+        SMP_CHECK_INT(read, 512);
+
+        {
+            int nonzero = 0;
+            int index;
+
+            for (index = 0; index < 1024; index++) {
+                if (buffer[index] != 0) {
+                    nonzero++;
+                }
+            }
+            SMP_CHECK(nonzero > 500);
+        }
+
+        SMP_CHECK(smp_media_seek(media, 24000));
+        SMP_CHECK_INT(smp_media_position(media), 24000);
+
+        read = smp_media_read(media, buffer, 512);
+        SMP_CHECK_INT(read, 512);
+
+        smp_media_close(media);
+    }
     smp_test_end();
 }
 
@@ -196,6 +254,8 @@ void suite_media(void)
     smp_test_suite("media");
     test_wav_roundtrip();
     test_unsupported();
+    decode_fixture("sample.flac", SMP_MEDIA_FLAC, "FLAC");
+    decode_fixture("sample.ogg", SMP_MEDIA_OGG, "OGG");
     test_mp3_duration_xing();
     test_mp3_duration_cbr();
     test_mp3_duration_skips_id3();

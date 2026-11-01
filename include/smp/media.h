@@ -1,4 +1,4 @@
-/*
+﻿/*
  * SMP - Swag Music Player
  * Audio decoding (WAV via dr_wav, MP3 via dr_mp3).
  *
@@ -16,6 +16,8 @@
 typedef enum {
     SMP_MEDIA_WAV = 0,
     SMP_MEDIA_MP3,
+    SMP_MEDIA_FLAC,
+    SMP_MEDIA_OGG,
 } SmpMediaKind;
 
 typedef struct SmpMedia SmpMedia;

@@ -2,7 +2,7 @@
 
 <div align="center">
 
-**A small, fast terminal music player for WAV and MP3 files.**
+**A small, fast terminal music player for WAV, MP3, FLAC and Ogg Vorbis.**
 
 Linux (ALSA) В· Windows (WASAPI) В· no shell-outs В· no external runtime dependencies
 
@@ -47,7 +47,8 @@ window, plays WAV and MP3 files, and stays out of the way.
 - Seeking, pause/resume, volume control, natural track ordering
 - UTF-8 aware layout (Cyrillic, CJK, emoji)
 - No flicker: the whole screen is composed in memory and written in one go
-- Portable C17 core, unit tested; the platform layer is tiny and isolated
+- Portable 64-bit C17 core, unit tested; the platform layer is tiny and isolated
+- Audio output through miniaudio: WASAPI, ALSA, PulseAudio and CoreAudio behind one API
 
 ## Requirements
 
@@ -56,7 +57,8 @@ window, plays WAV and MP3 files, and stays out of the way.
 | Linux | `cmake` в‰Ґ 3.20, a C17 compiler, `pkg-config`, ALSA headers (`libasound2-dev` on Debian/Ubuntu, `alsa-lib` on Fedora/Arch) |
 | Windows | CMake в‰Ґ 3.20, MinGW-w64 (MSYS2) or MSVC 2019+ |
 
-Everything else is vendored: `dr_wav`, `dr_mp3` and `stb_image` live in
+Everything else is vendored: miniaudio, `dr_wav`, `dr_mp3`, `dr_flac`,
+`stb_vorbis` and `stb_image` live in
 [`vendor/`](vendor/README.md).
 
 ## Build
@@ -149,9 +151,10 @@ ctest --test-dir build --output-on-failure
 ```
 
 The suite covers UTF-8 and layout helpers, path handling, the PCM
-converter/resampler, ID3/RIFF parsing, WAV decoding, playlist scanning,
-the render frame and the playback state machine. It runs without an audio
-device or a TTY.
+converter/resampler, ID3/RIFF/Vorbis-comment parsing, WAV/FLAC/Ogg decoding,
+playlist scanning, the render frame and the playback state machine. It runs
+without an audio device or a TTY; the FLAC and Ogg fixtures live in
+`tests/data`.
 
 ## License
 

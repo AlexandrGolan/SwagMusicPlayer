@@ -1,8 +1,8 @@
-cmake_minimum_required(VERSION 3.20)
+﻿cmake_minimum_required(VERSION 3.20)
 
 project(
     smp
-    VERSION 2.0.0
+    VERSION 2.1.0
     DESCRIPTION "SMP - a small terminal music player"
     LANGUAGES C
 )
@@ -16,6 +16,7 @@ option(SMP_BUILD_TESTS "Build the unit tests" ON)
 option(SMP_WERROR "Treat compiler warnings as errors" OFF)
 option(SMP_SANITIZE "Build with AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 option(SMP_STRICT "Enable extra strict warnings" ON)
+option(SMP_REQUIRE_64BIT "Fail the build when the target is not 64-bit" ON)
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
@@ -69,18 +70,9 @@ target_include_directories(smp_vendor SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/
 set(SMP_PLATFORM_SOURCES)
 
 if(WIN32)
-    list(
-        APPEND
-        SMP_PLATFORM_SOURCES
-        src/plat/thread_win.c
-        src/plat/term_win.c
-        src/audio/audio_wasapi.c
-    )
+    list(APPEND SMP_PLATFORM_SOURCES src/plat/thread_win.c src/plat/term_win.c)
 else()
     list(APPEND SMP_PLATFORM_SOURCES src/plat/thread_posix.c src/plat/term_posix.c)
-    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-        list(APPEND SMP_PLATFORM_SOURCES src/audio/audio_alsa.c)
-    endif()
 endif()
 
 # ---------------------------------------------------------------------------
@@ -100,8 +92,7 @@ add_library(
     src/playlist.c
     src/player.c
     src/ui.c
-    src/audio/audio.c
-    src/audio/audio_null.c
+    src/audio/audio_miniaudio.c
     ${SMP_PLATFORM_SOURCES}
 )
 
@@ -113,18 +104,34 @@ target_include_directories(
 
 target_link_libraries(smp_core PUBLIC smp_vendor)
 
+if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+    target_compile_definitions(smp_core PUBLIC SMP_64BIT=1)
+endif()
+
+if(SMP_REQUIRE_64BIT)
+    target_compile_definitions(smp_core PUBLIC SMP_REQUIRE_64BIT=1)
+endif()
+
 if(WIN32)
-    target_link_libraries(smp_core PUBLIC ole32)
+    target_link_libraries(smp_core PUBLIC ole32 uuid winmm)
 else()
-    target_compile_definitions(smp_core PRIVATE _POSIX_C_SOURCE=200809L)
+    target_compile_definitions(smp_core PRIVATE _POSIX_C_SOURCE=200809L _FILE_OFFSET_BITS=64)
     find_package(Threads REQUIRED)
-    target_link_libraries(smp_core PUBLIC Threads::Threads m)
+    target_link_libraries(smp_core PUBLIC Threads::Threads m ${CMAKE_DL_LIBS})
 endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(ALSA REQUIRED IMPORTED_TARGET alsa)
     target_link_libraries(smp_core PRIVATE PkgConfig::ALSA)
+endif()
+
+if(APPLE)
+    target_link_libraries(
+        smp_core
+        PRIVATE "-framework CoreAudio" "-framework AudioToolbox" "-framework AudioUnit"
+                "-framework CoreFoundation"
+    )
 endif()
 
 smp_apply_warnings(smp_core)
@@ -168,6 +175,9 @@ if(SMP_BUILD_TESTS)
         tests/test_player.c
     )
     target_include_directories(smp_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+    target_compile_definitions(
+        smp_tests PRIVATE "SMP_TEST_DATA_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/tests/data\""
+    )
     target_link_libraries(smp_tests PRIVATE smp_core)
     smp_apply_warnings(smp_tests)
 
