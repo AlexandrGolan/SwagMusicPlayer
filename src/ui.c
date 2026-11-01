@@ -16,18 +16,85 @@
 #define UI_MIN_HEIGHT 16
 #define UI_MESSAGE_MS 2500u
 
-/* Colour palette. */
-static const uint8_t color_accent[3] = {86, 182, 194};
-static const uint8_t color_text[3] = {220, 223, 228};
-static const uint8_t color_dim[3] = {120, 126, 138};
-static const uint8_t color_selected_bg[3] = {38, 48, 64};
-static const uint8_t color_playing[3] = {152, 195, 121};
-static const uint8_t color_error[3] = {224, 108, 117};
+/* Active palette; pure white unless a configuration file overrides it. */
+static SmpUiTheme g_theme;
 
 #define SEPARATOR "\xe2\x94\x80"  /* РІвЂќР‚ */
 #define BAR_FULL "\xe2\x96\x88"   /* РІвЂ“в‚¬ */
 #define BAR_EMPTY "\xe2\x96\x91"  /* РІвЂ“вЂ */
 #define MARKER "\xe2\x96\xb6"     /* РІвЂ“В¶ */
+
+void smp_ui_theme_defaults(SmpUiTheme *theme)
+{
+    SmpRgb white = {255, 255, 255};
+
+    if (theme == NULL) {
+        return;
+    }
+
+    theme->text = white;
+    theme->accent = white;
+    theme->dim = white;
+    theme->selection_bg = white;
+    theme->playing = white;
+    theme->error = white;
+    theme->progress = white;
+    theme->volume = white;
+    theme->border = white;
+    theme->cover = white;
+    theme->spectrum = white;
+    theme->cover_mode = SMP_COVER_BLOCKS;
+    theme->show_spectrum = true;
+}
+
+static SmpRgb color_to_rgb(SmpColor color)
+{
+    SmpRgb rgb;
+
+    rgb.r = color.r;
+    rgb.g = color.g;
+    rgb.b = color.b;
+    return rgb;
+}
+
+void smp_ui_theme_from_config(SmpUiTheme *theme, const SmpConfig *config)
+{
+    if (theme == NULL || config == NULL) {
+        return;
+    }
+
+    theme->text = color_to_rgb(config->text);
+    theme->accent = color_to_rgb(config->accent);
+    theme->dim = color_to_rgb(config->dim);
+    theme->selection_bg = color_to_rgb(config->selection_bg);
+    theme->playing = color_to_rgb(config->playing);
+    theme->error = color_to_rgb(config->error);
+    theme->progress = color_to_rgb(config->progress);
+    theme->volume = color_to_rgb(config->volume_color);
+    theme->border = color_to_rgb(config->border);
+    theme->cover = color_to_rgb(config->cover);
+    theme->spectrum = color_to_rgb(config->spectrum);
+    theme->cover_mode = config->cover_mode == 1 ? SMP_COVER_ASCII : SMP_COVER_BLOCKS;
+    theme->show_spectrum = config->visualizer;
+}
+
+void smp_ui_set_theme(SmpUiState *state, const SmpUiTheme *theme)
+{
+    if (state == NULL || theme == NULL) {
+        return;
+    }
+
+    state->theme = *theme;
+    g_theme = *theme;
+}
+
+void smp_ui_set_spectrum(SmpUiState *state, SmpSpectrum *spectrum)
+{
+    if (state == NULL) {
+        return;
+    }
+    state->spectrum = spectrum;
+}
 
 void smp_ui_init(SmpUiState *state)
 {
@@ -37,6 +104,9 @@ void smp_ui_init(SmpUiState *state)
 
     memset(state, 0, sizeof(*state));
     smp_image_init(&state->cover);
+
+    smp_ui_theme_defaults(&state->theme);
+    g_theme = state->theme;
 }
 
 void smp_ui_free(SmpUiState *state)
@@ -45,6 +115,11 @@ void smp_ui_free(SmpUiState *state)
         return;
     }
     smp_image_free(&state->cover);
+    smp_image_free(&state->cover_scaled);
+    free(state->cover_ascii);
+    state->cover_ascii = NULL;
+    state->cover_ascii_columns = 0;
+    state->cover_ascii_rows = 0;
 }
 
 void smp_ui_set_directory(SmpUiState *state, const char *directory)
@@ -55,6 +130,9 @@ void smp_ui_set_directory(SmpUiState *state, const char *directory)
 
     snprintf(state->music_directory, sizeof(state->music_directory), "%s", directory);
     smp_image_free(&state->cover);
+    smp_image_free(&state->cover_scaled);
+    state->cover_scaled_width = 0;
+    state->cover_scaled_height = 0;
     state->cover_path[0] = '\0';
     state->cover_loaded = false;
 }
@@ -115,9 +193,9 @@ static void format_time(double seconds, char *buffer, size_t size)
     }
 }
 
-static void put_styled(SmpFrame *frame, int x, int y, const char *text, const uint8_t color[3])
+static void put_styled(SmpFrame *frame, int x, int y, const char *text, SmpRgb color)
 {
-    smp_frame_set_style(frame, smp_style_fg(color[0], color[1], color[2]));
+    smp_frame_set_style(frame, smp_style_fg(color.r, color.g, color.b));
     (void)smp_frame_put(frame, x, y, text);
 }
 
@@ -126,7 +204,7 @@ static void put_ellipsized(SmpFrame *frame,
                            int y,
                            int width,
                            const char *text,
-                           const uint8_t color[3])
+                           SmpRgb color)
 {
     char buffer[512];
 
@@ -142,10 +220,10 @@ static void draw_header(SmpFrame *frame, const SmpPlayerSnapshot *player)
     int index;
     int x;
 
-    smp_frame_set_style(frame, smp_style_bold(color_accent[0], color_accent[1], color_accent[2]));
+    smp_frame_set_style(frame, smp_style_bold(g_theme.accent.r, g_theme.accent.g, g_theme.accent.b));
     (void)smp_frame_put(frame, 1, 0, "SMP");
 
-    smp_frame_set_style(frame, smp_style_dim(color_dim[0], color_dim[1], color_dim[2]));
+    smp_frame_set_style(frame, smp_style_dim(g_theme.dim.r, g_theme.dim.g, g_theme.dim.b));
     (void)smp_frame_put(frame, 5, 0, "Swag Music Player");
 
     bar_cells = 16;
@@ -157,11 +235,11 @@ static void draw_header(SmpFrame *frame, const SmpPlayerSnapshot *player)
         return;
     }
 
-    smp_frame_set_style(frame, smp_style_fg(color_dim[0], color_dim[1], color_dim[2]));
+    smp_frame_set_style(frame, smp_style_fg(g_theme.dim.r, g_theme.dim.g, g_theme.dim.b));
     (void)smp_frame_put(frame, x, 0, "vol ");
     (void)smp_frame_put(frame, x + 4, 0, volume + 0);
 
-    smp_frame_set_style(frame, smp_style_fg(color_accent[0], color_accent[1], color_accent[2]));
+    smp_frame_set_style(frame, smp_style_fg(g_theme.accent.r, g_theme.accent.g, g_theme.accent.b));
     for (index = 0; index < bar_cells; index++) {
         (void)smp_frame_put(frame, x + 9 + index, 0, index < filled ? BAR_FULL : BAR_EMPTY);
     }
@@ -171,10 +249,94 @@ static void draw_separator(SmpFrame *frame, int y, int x, int width)
 {
     int index;
 
-    smp_frame_set_style(frame, smp_style_dim(color_dim[0], color_dim[1], color_dim[2]));
+    smp_frame_set_style(frame, smp_style_dim(g_theme.dim.r, g_theme.dim.g, g_theme.dim.b));
     for (index = 0; index < width; index++) {
         (void)smp_frame_put(frame, x + index, y, SEPARATOR);
     }
+}
+
+/*
+ * Own ASCII-art implementation: the cover is averaged down to one character
+ * per cell and the luminance picks a glyph from the ramp. No external tool
+ * (tiv, chafa, ImageMagick) is involved.
+ */
+static void draw_cover_ascii(SmpUiState *state,
+                             SmpFrame *frame,
+                             int x,
+                             int y,
+                             int width,
+                             int height)
+{
+    int columns = SMP_MIN(width, height * 2);
+    int rows;
+    size_t stride;
+    char *text;
+    int offset_x;
+    int offset_y;
+    int row;
+    int column;
+
+    if (columns < 4) {
+        return;
+    }
+
+    rows = columns / 2;
+    if (rows > height) {
+        rows = height;
+        columns = rows * 2;
+    }
+    if (rows < 2 || columns > state->cover.width || rows > state->cover.height) {
+        return;
+    }
+
+    stride = (size_t)columns + 1u;
+
+    if (state->cover_ascii == NULL || state->cover_ascii_columns != columns
+        || state->cover_ascii_rows != rows)
+    {
+        char *fresh = (char *)realloc(state->cover_ascii, stride * (size_t)rows);
+
+        if (fresh == NULL) {
+            return;
+        }
+        state->cover_ascii = fresh;
+        state->cover_ascii_stride = stride;
+        state->cover_ascii_columns = columns;
+        state->cover_ascii_rows = rows;
+
+        if (!smp_image_to_ascii(&state->cover, columns, rows, fresh, stride)) {
+            state->cover_ascii_columns = 0;
+            return;
+        }
+    }
+
+    text = state->cover_ascii;
+    stride = state->cover_ascii_stride;
+
+    offset_x = x + (width - columns) / 2;
+    offset_y = y + (height - rows) / 2;
+
+    for (row = 0; row < rows; row++) {
+        for (column = 0; column < columns; column++) {
+            char glyph = text[(size_t)row * stride + (size_t)column];
+
+            if (glyph == ' ') {
+                continue;
+            }
+            smp_frame_put_cell(frame,
+                               offset_x + column,
+                               offset_y + row,
+                               (uint32_t)(unsigned char)glyph,
+                               g_theme.cover.r,
+                               g_theme.cover.g,
+                               g_theme.cover.b,
+                               false,
+                               0,
+                               0,
+                               0);
+        }
+    }
+
 }
 
 static void draw_cover(SmpUiState *state, SmpFrame *frame, int x, int y, int width, int height)
@@ -188,7 +350,7 @@ static void draw_cover(SmpUiState *state, SmpFrame *frame, int x, int y, int wid
     ensure_cover(state);
 
     if (state->cover.pixels == NULL || state->cover.width <= 0 || state->cover.height <= 0) {
-        smp_frame_set_style(frame, smp_style_dim(color_dim[0], color_dim[1], color_dim[2]));
+        smp_frame_set_style(frame, smp_style_dim(g_theme.dim.r, g_theme.dim.g, g_theme.dim.b));
 
         {
             const char *text = "no cover art";
@@ -200,6 +362,11 @@ static void draw_cover(SmpUiState *state, SmpFrame *frame, int x, int y, int wid
             }
             (void)smp_frame_put(frame, text_x, y + height / 2, text);
         }
+        return;
+    }
+
+    if (g_theme.cover_mode == SMP_COVER_ASCII) {
+        draw_cover_ascii(state, frame, x, y, width, height);
         return;
     }
 
@@ -215,10 +382,17 @@ static void draw_cover(SmpUiState *state, SmpFrame *frame, int x, int y, int wid
     }
 
     {
-        SmpImage scaled;
-
-        if (smp_image_resize_box(&state->cover, &scaled, cells_x, cells_y * 2) != SMP_OK) {
-            return;
+        if (state->cover_scaled_width != cells_x || state->cover_scaled_height != cells_y * 2) {
+            smp_image_free(&state->cover_scaled);
+            if (smp_image_resize_box(&state->cover, &state->cover_scaled, cells_x, cells_y * 2)
+                != SMP_OK)
+            {
+                state->cover_scaled_width = 0;
+                state->cover_scaled_height = 0;
+                return;
+            }
+            state->cover_scaled_width = cells_x;
+            state->cover_scaled_height = cells_y * 2;
         }
 
         offset_x = x + (width - cells_x) / 2;
@@ -228,11 +402,14 @@ static void draw_cover(SmpUiState *state, SmpFrame *frame, int x, int y, int wid
             int column;
 
             for (column = 0; column < cells_x; column++) {
-                const uint8_t *top
-                    = scaled.pixels + (((size_t)(row * 2) * (size_t)scaled.width) + (size_t)column) * 4u;
+                const uint8_t *top = state->cover_scaled.pixels
+                                     + (((size_t)(row * 2) * (size_t)state->cover_scaled.width)
+                                        + (size_t)column)
+                                           * 4u;
                 const uint8_t *bottom
-                    = scaled.pixels
-                      + (((size_t)(row * 2 + 1) * (size_t)scaled.width) + (size_t)column) * 4u;
+                    = state->cover_scaled.pixels
+                      + (((size_t)(row * 2 + 1) * (size_t)state->cover_scaled.width) + (size_t)column)
+                            * 4u;
 
                 smp_frame_put_cell(frame,
                                    offset_x + column,
@@ -248,7 +425,81 @@ static void draw_cover(SmpUiState *state, SmpFrame *frame, int x, int y, int wid
             }
         }
 
-        smp_image_free(&scaled);
+    }
+}
+
+/* Cava style bars: one column group per band, bottom aligned, with a peak dot. */
+static void draw_spectrum(SmpUiState *state, SmpFrame *frame, int x, int y, int width, int height)
+{
+    size_t bands;
+    size_t band;
+    int bar_width;
+
+    if (state->spectrum == NULL || height < 2 || width < 8) {
+        return;
+    }
+
+    bands = smp_spectrum_band_count(state->spectrum);
+    if (bands == 0) {
+        return;
+    }
+
+    bar_width = width / (int)bands;
+    if (bar_width < 1) {
+        bar_width = 1;
+    }
+
+    for (band = 0; band < bands; band++) {
+        int bar_x = x + (int)band * bar_width;
+        int columns = bar_width > 1 ? bar_width - 1 : 1;
+        float value = smp_spectrum_band(state->spectrum, band);
+        float peak = smp_spectrum_peak(state->spectrum, band);
+        int bar_height = (int)(value * (float)height + 0.5f);
+        int peak_row = (int)(peak * (float)(height - 1) + 0.5f);
+        int row;
+        int column;
+
+        if (bar_x + columns > x + width) {
+            break;
+        }
+        if (bar_height > height) {
+            bar_height = height;
+        }
+        if (peak_row > height - 1) {
+            peak_row = height - 1;
+        }
+
+        for (row = 0; row < bar_height; row++) {
+            for (column = 0; column < columns; column++) {
+                smp_frame_put_cell(frame,
+                                   bar_x + column,
+                                   y + height - 1 - row,
+                                   0x2588u, /* full block */
+                                   g_theme.spectrum.r,
+                                   g_theme.spectrum.g,
+                                   g_theme.spectrum.b,
+                                   false,
+                                   0,
+                                   0,
+                                   0);
+            }
+        }
+
+        if (peak > 0.03f && peak_row >= bar_height) {
+            for (column = 0; column < columns; column++) {
+                smp_frame_put_cell(frame,
+                                   bar_x + column,
+                                   y + height - 1 - peak_row,
+                                   0x2580u, /* upper half block */
+                                   g_theme.spectrum.r,
+                                   g_theme.spectrum.g,
+                                   g_theme.spectrum.b,
+                                   false,
+                                   0,
+                                   0,
+                                   0);
+            }
+        }
     }
 }
 
@@ -278,20 +529,20 @@ static void draw_now_playing(SmpFrame *frame,
     char subtitle[320];
     char buffer[64];
 
-    smp_frame_set_style(frame, smp_style_dim(color_dim[0], color_dim[1], color_dim[2]));
+    smp_frame_set_style(frame, smp_style_dim(g_theme.dim.r, g_theme.dim.g, g_theme.dim.b));
     (void)smp_frame_put(frame, x, y, label);
 
-    smp_frame_set_style(frame, smp_style_bold(color_text[0], color_text[1], color_text[2]));
+    smp_frame_set_style(frame, smp_style_bold(g_theme.text.r, g_theme.text.g, g_theme.text.b));
     smp_utf8_ellipsize(player->title, width, title, sizeof(title));
     (void)smp_frame_put(frame, x, y + 1, title);
 
     snprintf(subtitle, sizeof(subtitle), "%s", player->artist);
 
-    smp_frame_set_style(frame, smp_style_fg(color_accent[0], color_accent[1], color_accent[2]));
+    smp_frame_set_style(frame, smp_style_fg(g_theme.accent.r, g_theme.accent.g, g_theme.accent.b));
     smp_utf8_ellipsize(subtitle, width, buffer, sizeof(buffer));
     (void)smp_frame_put(frame, x, y + 2, buffer);
 
-    smp_frame_set_style(frame, smp_style_dim(color_dim[0], color_dim[1], color_dim[2]));
+    smp_frame_set_style(frame, smp_style_dim(g_theme.dim.r, g_theme.dim.g, g_theme.dim.b));
     snprintf(subtitle, sizeof(subtitle), "%s", player->album);
     smp_utf8_ellipsize(subtitle, width, buffer, sizeof(buffer));
     (void)smp_frame_put(frame, x, y + 3, buffer);
@@ -325,20 +576,20 @@ static void draw_progress(SmpFrame *frame,
         filled = (int)(ratio * (double)bar_width);
     }
 
-    smp_frame_set_style(frame, smp_style_fg(color_text[0], color_text[1], color_text[2]));
+    smp_frame_set_style(frame, smp_style_fg(g_theme.text.r, g_theme.text.g, g_theme.text.b));
     (void)smp_frame_put(frame, x, y, "[");
 
     for (index = 0; index < bar_width; index++) {
         if (index < filled) {
-            smp_frame_set_style(frame, smp_style_fg(color_accent[0], color_accent[1], color_accent[2]));
+            smp_frame_set_style(frame, smp_style_fg(g_theme.accent.r, g_theme.accent.g, g_theme.accent.b));
             (void)smp_frame_put(frame, x + 1 + index, y, BAR_FULL);
         } else {
-            smp_frame_set_style(frame, smp_style_fg(color_dim[0], color_dim[1], color_dim[2]));
+            smp_frame_set_style(frame, smp_style_fg(g_theme.dim.r, g_theme.dim.g, g_theme.dim.b));
             (void)smp_frame_put(frame, x + 1 + index, y, BAR_EMPTY);
         }
     }
 
-    smp_frame_set_style(frame, smp_style_fg(color_text[0], color_text[1], color_text[2]));
+    smp_frame_set_style(frame, smp_style_fg(g_theme.text.r, g_theme.text.g, g_theme.text.b));
     (void)smp_frame_put(frame, x + 1 + bar_width, y, "]");
 
     format_time(player->position, elapsed, sizeof(elapsed));
@@ -348,10 +599,26 @@ static void draw_progress(SmpFrame *frame,
         snprintf(total, sizeof(total), "--:--");
     }
 
-    smp_frame_set_style(frame, smp_style_dim(color_dim[0], color_dim[1], color_dim[2]));
+    smp_frame_set_style(frame, smp_style_dim(g_theme.dim.r, g_theme.dim.g, g_theme.dim.b));
     (void)smp_frame_put(frame, x + bar_width + 3, y, elapsed);
     (void)smp_frame_put(frame, x + bar_width + 3 + (int)strlen(elapsed), y, " / ");
     (void)smp_frame_put(frame, x + bar_width + 6 + (int)strlen(elapsed), y, total);
+}
+
+/* Rough perceived brightness, used to detect an unreadable selection colour. */
+static int color_luminance(SmpRgb color)
+{
+    return (2126 * (int)color.r + 7152 * (int)color.g + 722 * (int)color.b) / 10000;
+}
+
+static bool low_contrast(SmpRgb first, SmpRgb second)
+{
+    int difference = color_luminance(first) - color_luminance(second);
+
+    if (difference < 0) {
+        difference = -difference;
+    }
+    return difference < 48;
 }
 
 static void draw_playlist(SmpUiState *state,
@@ -367,7 +634,7 @@ static void draw_playlist(SmpUiState *state,
     size_t visible = (size_t)height;
     size_t index;
 
-    smp_frame_set_style(frame, smp_style_bold(color_text[0], color_text[1], color_text[2]));
+    smp_frame_set_style(frame, smp_style_bold(g_theme.text.r, g_theme.text.g, g_theme.text.b));
     snprintf(header,
              sizeof(header),
              "playlist  %zu %s",
@@ -376,7 +643,7 @@ static void draw_playlist(SmpUiState *state,
     (void)smp_frame_put(frame, x, y, header);
 
     if (visible < 1 || playlist->count == 0) {
-        smp_frame_set_style(frame, smp_style_dim(color_dim[0], color_dim[1], color_dim[2]));
+        smp_frame_set_style(frame, smp_style_dim(g_theme.dim.r, g_theme.dim.g, g_theme.dim.b));
         (void)smp_frame_put(frame, x, y + 1, "no tracks in this directory");
         return;
     }
@@ -419,28 +686,30 @@ static void draw_playlist(SmpUiState *state,
         snprintf(label, sizeof(label), "%2zu. %s", track_index + 1u, title);
 
         if (is_selected) {
-            smp_frame_set_style(frame,
-                                smp_style_fg(color_text[0], color_text[1], color_text[2]));
-            {
-                SmpStyle style = smp_style_fg(color_text[0], color_text[1], color_text[2]);
+            SmpStyle style = smp_style_fg(g_theme.text.r, g_theme.text.g, g_theme.text.b);
 
+            if (low_contrast(g_theme.selection_bg, g_theme.text)) {
+                /* White on white would be invisible, so highlight by inversion. */
+                style.flags |= SMP_CELL_REVERSE;
+            } else {
                 style.has_bg = true;
-                style.bg[0] = color_selected_bg[0];
-                style.bg[1] = color_selected_bg[1];
-                style.bg[2] = color_selected_bg[2];
-                smp_frame_set_style(frame, style);
+                style.bg[0] = g_theme.selection_bg.r;
+                style.bg[1] = g_theme.selection_bg.g;
+                style.bg[2] = g_theme.selection_bg.b;
             }
+
+            smp_frame_set_style(frame, style);
             smp_frame_fill(frame, x, y + 1 + (int)index, width, 1, ' ');
         } else {
             smp_frame_set_style(frame,
-                                smp_style_fg(is_current ? color_playing[0] : color_text[0],
-                                             is_current ? color_playing[1] : color_text[1],
-                                             is_current ? color_playing[2] : color_text[2]));
+                                smp_style_fg(is_current ? g_theme.playing.r : g_theme.text.r,
+                                             is_current ? g_theme.playing.g : g_theme.text.g,
+                                             is_current ? g_theme.playing.b : g_theme.text.b));
         }
 
         (void)smp_frame_put(frame, x, y + 1 + (int)index, label);
 
-        smp_frame_set_style(frame, smp_style_dim(color_dim[0], color_dim[1], color_dim[2]));
+        smp_frame_set_style(frame, smp_style_dim(g_theme.dim.r, g_theme.dim.g, g_theme.dim.b));
         (void)smp_frame_put(frame,
                             x + width - (int)strlen(duration) - 1,
                             y + 1 + (int)index,
@@ -465,6 +734,8 @@ static void draw_help(SmpFrame *frame)
         "  + / -          volume",
         "  page up/down   volume",
         "  r              reload the library",
+        "  v              toggle the visualiser",
+        "  a              ASCII / block cover art",
         "  h / ?          toggle this help",
         "  q / esc        quit",
     };
@@ -482,7 +753,7 @@ static void draw_help(SmpFrame *frame)
     }
 
     {
-        SmpStyle style = smp_style_fg(color_text[0], color_text[1], color_text[2]);
+        SmpStyle style = smp_style_fg(g_theme.text.r, g_theme.text.g, g_theme.text.b);
 
         style.has_bg = true;
         style.bg[0] = 24;
@@ -497,8 +768,8 @@ static void draw_help(SmpFrame *frame)
             break;
         }
         smp_frame_set_style(frame,
-                            index == 0 ? smp_style_bold(color_accent[0], color_accent[1], color_accent[2])
-                                       : smp_style_fg(color_text[0], color_text[1], color_text[2]));
+                            index == 0 ? smp_style_bold(g_theme.accent.r, g_theme.accent.g, g_theme.accent.b)
+                                       : smp_style_fg(g_theme.text.r, g_theme.text.g, g_theme.text.b));
         (void)smp_frame_put_n(frame, x + 1, y + 1 + index, lines[index], box_width - 2);
     }
 }
@@ -510,15 +781,15 @@ static void draw_footer(SmpUiState *state,
                         uint64_t now_ms)
 {
     static const char *const keys
-        = " \xe2\x86\x91\xe2\x86\x93 select  \xe2\x86\xb5 play  space pause  \xe2\x86\x90\xe2\x86\x92 seek  "
-          "+/- vol  n/p  ? help  q quit";
+        = " \xe2\x86\x91\xe2\x86\x93  \xe2\x86\xb5 play  space pause  \xe2\x86\x90\xe2\x86\x92 seek  "
+          "+/- vol  v viz  a art  ? help  q quit";
     int status_y = frame->height - 2;
     char status[320];
 
     draw_separator(frame, status_y - 1, 0, frame->width);
 
     if (state->message[0] != '\0' && now_ms < state->message_until) {
-        put_ellipsized(frame, 1, status_y, frame->width - 2, state->message, color_accent);
+        put_ellipsized(frame, 1, status_y, frame->width - 2, state->message, g_theme.accent);
     } else {
         snprintf(status,
                  sizeof(status),
@@ -530,14 +801,14 @@ static void draw_footer(SmpUiState *state,
                  backend != NULL ? backend : "?");
 
         smp_frame_set_style(frame,
-                            smp_style_fg(player->state == SMP_PLAYER_ERROR ? color_error[0] : color_dim[0],
-                                         player->state == SMP_PLAYER_ERROR ? color_error[1] : color_dim[1],
-                                         player->state == SMP_PLAYER_ERROR ? color_error[2] : color_dim[2]));
-        put_ellipsized(frame, 1, status_y, frame->width - 2, status, color_dim);
+                            smp_style_fg(player->state == SMP_PLAYER_ERROR ? g_theme.error.r : g_theme.dim.r,
+                                         player->state == SMP_PLAYER_ERROR ? g_theme.error.g : g_theme.dim.g,
+                                         player->state == SMP_PLAYER_ERROR ? g_theme.error.b : g_theme.dim.b));
+        put_ellipsized(frame, 1, status_y, frame->width - 2, status, g_theme.dim);
     }
 
-    smp_frame_set_style(frame, smp_style_dim(color_dim[0], color_dim[1], color_dim[2]));
-    put_ellipsized(frame, 1, frame->height - 1, frame->width - 2, keys, color_dim);
+    smp_frame_set_style(frame, smp_style_dim(g_theme.dim.r, g_theme.dim.g, g_theme.dim.b));
+    put_ellipsized(frame, 1, frame->height - 1, frame->width - 2, keys, g_theme.dim);
 }
 
 void smp_ui_render(SmpUiState *state,
@@ -569,7 +840,7 @@ void smp_ui_render(SmpUiState *state,
                  frame->height,
                  UI_MIN_WIDTH,
                  UI_MIN_HEIGHT);
-        smp_frame_set_style(frame, smp_style_fg(color_error[0], color_error[1], color_error[2]));
+        smp_frame_set_style(frame, smp_style_fg(g_theme.error.r, g_theme.error.g, g_theme.error.b));
         (void)smp_frame_put(frame, 1, frame->height / 2, message);
         return;
     }
@@ -607,8 +878,29 @@ void smp_ui_render(SmpUiState *state,
         draw_header(frame, &inactive);
         draw_separator(frame, 1, 0, frame->width);
 
-        /* Left panel: cover art. */
-        draw_cover(state, frame, 1, 3, left_width - 2, frame->height - 7);
+        /* Left panel: cover art, with the visualiser underneath. */
+        {
+            int panel_top = 3;
+            int panel_height = frame->height - 4 - panel_top + 1;
+            int spectrum_height = 0;
+            int cover_height;
+
+            if (state->spectrum != NULL && state->theme.show_spectrum && panel_height > 12) {
+                spectrum_height = SMP_MIN(9, panel_height / 3);
+            }
+            cover_height = panel_height - spectrum_height;
+
+            draw_cover(state, frame, 1, panel_top, left_width - 2, cover_height);
+
+            if (spectrum_height > 1) {
+                draw_spectrum(state,
+                              frame,
+                              1,
+                              panel_top + cover_height + 1,
+                              left_width - 2,
+                              spectrum_height - 1);
+            }
+        }
         draw_separator(frame, 2, 0, frame->width);
 
         /* Right panel: track info and playlist. */
@@ -635,7 +927,7 @@ void smp_ui_render(SmpUiState *state,
     {
         int row;
 
-        smp_frame_set_style(frame, smp_style_dim(color_dim[0], color_dim[1], color_dim[2]));
+        smp_frame_set_style(frame, smp_style_dim(g_theme.dim.r, g_theme.dim.g, g_theme.dim.b));
         for (row = 2; row < frame->height - 2; row++) {
             (void)smp_frame_put(frame, left_width, row, "\xe2\x94\x82");
         }

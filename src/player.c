@@ -49,6 +49,10 @@ struct SmpPlayer {
     double duration;
     int sample_rate;
     int channels;
+
+    SmpSpectrum *spectrum;
+    int16_t *mono;
+    size_t mono_capacity;
 };
 
 static void copy_text(char *destination, size_t size, const char *source)
@@ -171,6 +175,9 @@ static int worker(void *argument)
             }
         }
 
+        /* The new track owns the device now; drop the mute from the switch. */
+        smp_audio_set_muted(player->device, false);
+
         for (;;) {
             size_t frames_read;
             int16_t *converted;
@@ -229,6 +236,25 @@ static int worker(void *argument)
             }
 
             pcm_apply_gain(converted, converted_frames * SMP_OUTPUT_CHANNELS, volume);
+
+            if (player->spectrum != NULL && player->mono != NULL) {
+                size_t offset = 0;
+
+                while (offset < converted_frames) {
+                    size_t chunk = SMP_MIN(converted_frames - offset, player->mono_capacity);
+                    size_t sample;
+
+                    for (sample = 0; sample < chunk; sample++) {
+                        int32_t left = converted[(offset + sample) * 2];
+                        int32_t right = converted[(offset + sample) * 2 + 1];
+
+                        player->mono[sample] = (int16_t)((left + right) / 2);
+                    }
+
+                    smp_spectrum_feed(player->spectrum, player->mono, chunk);
+                    offset += chunk;
+                }
+            }
 
             if (smp_audio_write(player->device, converted, converted_frames) != SMP_OK) {
                 lock(player);
@@ -291,8 +317,18 @@ SmpPlayer *smp_player_create(const Playlist *playlist, SmpAudioDevice *device)
         return NULL;
     }
 
+    player->mono_capacity = 32768u;
+    player->mono = (int16_t *)malloc(player->mono_capacity * sizeof(int16_t));
+    if (player->mono == NULL) {
+        smp_mutex_destroy(player->mutex);
+        smp_cond_destroy(player->cond);
+        free(player);
+        return NULL;
+    }
+
     player->thread = smp_thread_start(worker, player);
     if (player->thread == NULL) {
+        free(player->mono);
         smp_mutex_destroy(player->mutex);
         smp_cond_destroy(player->cond);
         free(player);
@@ -314,10 +350,13 @@ void smp_player_destroy(SmpPlayer *player)
     smp_cond_broadcast(player->cond);
     unlock(player);
 
+    smp_audio_set_muted(player->device, true);
+
     smp_thread_join(player->thread);
 
     smp_cond_destroy(player->cond);
     smp_mutex_destroy(player->mutex);
+    free(player->mono);
     free(player);
 }
 
@@ -326,6 +365,9 @@ void smp_player_play(SmpPlayer *player, size_t index)
     if (player == NULL) {
         return;
     }
+
+    /* Silence the old track at once instead of playing out its buffer. */
+    smp_audio_set_muted(player->device, true);
 
     lock(player);
     if (index >= player->playlist->count) {
@@ -339,6 +381,8 @@ void smp_player_play(SmpPlayer *player, size_t index)
 
 void smp_player_toggle(SmpPlayer *player)
 {
+    bool paused = false;
+
     if (player == NULL) {
         return;
     }
@@ -354,7 +398,15 @@ void smp_player_toggle(SmpPlayer *player)
         start_track_locked(player);
     }
 
+    paused = player->state == SMP_PLAYER_PAUSED;
     unlock(player);
+
+    /*
+     * Pausing mutes the device immediately: the queued frames are still
+     * consumed by the callback but never heard, so there is no audible
+     * tail-off when the key is pressed.
+     */
+    smp_audio_set_muted(player->device, paused);
 }
 
 void smp_player_stop(SmpPlayer *player)
@@ -373,6 +425,8 @@ void smp_player_stop(SmpPlayer *player)
     player->finished = false;
     smp_cond_broadcast(player->cond);
     unlock(player);
+
+    smp_audio_set_muted(player->device, true);
 }
 
 void smp_player_next(SmpPlayer *player)
@@ -465,6 +519,17 @@ void smp_player_seek_by(SmpPlayer *player, double delta)
         target = 0.0;
     }
     smp_player_seek(player, target);
+}
+
+void smp_player_set_spectrum(SmpPlayer *player, SmpSpectrum *spectrum)
+{
+    if (player == NULL) {
+        return;
+    }
+
+    lock(player);
+    player->spectrum = spectrum;
+    unlock(player);
 }
 
 void smp_player_set_volume(SmpPlayer *player, int volume)

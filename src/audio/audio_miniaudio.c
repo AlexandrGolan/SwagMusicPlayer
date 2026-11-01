@@ -39,7 +39,7 @@
 #include "smp/audio.h"
 #include "smp/common.h"
 
-#define BUFFER_SECONDS 1u
+#define BUFFER_MILLISECONDS 250u
 
 struct SmpAudioDevice {
     ma_context context;
@@ -160,7 +160,7 @@ SmpStatus smp_audio_open(const char *backend,
 
     result = ma_pcm_rb_init(ma_format_s16,
                             device->channels,
-                            device->sample_rate * BUFFER_SECONDS,
+                            device->sample_rate * BUFFER_MILLISECONDS / 1000u,
                             NULL,
                             NULL,
                             &device->ring);
@@ -273,6 +273,15 @@ SmpStatus smp_audio_write(SmpAudioDevice *device, const int16_t *frames, size_t 
     }
 
     return SMP_OK;
+}
+
+void smp_audio_set_muted(SmpAudioDevice *device, bool muted)
+{
+    if (device == NULL || !device->has_device) {
+        return;
+    }
+
+    (void)ma_device_set_master_volume(&device->device, muted ? 0.0f : 1.0f);
 }
 
 void smp_audio_drain(SmpAudioDevice *device)

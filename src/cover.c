@@ -1,4 +1,4 @@
-/*
+﻿/*
  * SMP - Swag Music Player
  * Cover art discovery and image scaling.
  *
@@ -158,6 +158,90 @@ SmpStatus smp_image_resize_box(const SmpImage *source, SmpImage *out_image, int 
     out_image->height = height;
     out_image->pixels = pixels;
     return SMP_OK;
+}
+
+const char *smp_ascii_ramp(void)
+{
+    return " .:-=+*#%@";
+}
+
+bool smp_image_to_ascii(const SmpImage *image, int columns, int rows, char *out, size_t stride)
+{
+    const char *ramp = smp_ascii_ramp();
+    int ramp_length = (int)strlen(ramp);
+    int row;
+    int column;
+
+    if (image == NULL || image->pixels == NULL || out == NULL) {
+        return false;
+    }
+    if (columns <= 0 || rows <= 0 || columns > image->width || rows > image->height) {
+        return false;
+    }
+    if (stride < (size_t)columns + 1u) {
+        return false;
+    }
+
+    for (row = 0; row < rows; row++) {
+        int y0 = row * image->height / rows;
+        int y1 = (row + 1) * image->height / rows;
+
+        if (y1 <= y0) {
+            y1 = y0 + 1;
+        }
+
+        for (column = 0; column < columns; column++) {
+            int x0 = column * image->width / columns;
+            int x1 = (column + 1) * image->width / columns;
+            uint32_t red = 0;
+            uint32_t green = 0;
+            uint32_t blue = 0;
+            uint32_t samples = 0;
+            int y;
+            int x;
+
+            if (x1 <= x0) {
+                x1 = x0 + 1;
+            }
+
+            for (y = y0; y < y1; y++) {
+                const uint8_t *line = image->pixels + (size_t)y * (size_t)image->width * 4u;
+
+                for (x = x0; x < x1; x++) {
+                    const uint8_t *pixel = line + (size_t)x * 4u;
+
+                    red += pixel[0];
+                    green += pixel[1];
+                    blue += pixel[2];
+                    samples++;
+                }
+            }
+
+            if (samples == 0) {
+                samples = 1;
+            }
+
+            {
+                /* Rec. 709 luminance, 0..255. */
+                uint32_t luminance
+                    = (2126u * red / samples + 7152u * green / samples + 722u * blue / samples)
+                      / 10000u;
+                int level = (int)(luminance * (uint32_t)(ramp_length - 1) / 255u);
+
+                if (level < 0) {
+                    level = 0;
+                }
+                if (level >= ramp_length) {
+                    level = ramp_length - 1;
+                }
+                out[(size_t)row * stride + (size_t)column] = ramp[level];
+            }
+        }
+
+        out[(size_t)row * stride + (size_t)columns] = '\0';
+    }
+
+    return true;
 }
 
 static bool contains_case_insensitive(const char *text, const char *needle)

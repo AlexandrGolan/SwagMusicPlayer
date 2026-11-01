@@ -249,6 +249,32 @@ static bool key_from_record(const INPUT_RECORD *record, SmpKey *key)
         return true;
     }
 
+    /*
+     * Some input paths (synthetic events, certain terminal hosts) deliver a
+     * key without a translated character. Fall back to the virtual key so
+     * letters and the volume keys keep working.
+     */
+    if (event->wVirtualKeyCode >= 'A' && event->wVirtualKeyCode <= 'Z') {
+        key->code = SMP_KEY_CHAR;
+        key->character = (uint32_t)(event->wVirtualKeyCode - 'A' + 'a');
+        return true;
+    }
+    if (event->wVirtualKeyCode >= '0' && event->wVirtualKeyCode <= '9') {
+        key->code = SMP_KEY_CHAR;
+        key->character = (uint32_t)event->wVirtualKeyCode;
+        return true;
+    }
+    if (event->wVirtualKeyCode == VK_OEM_PLUS) {
+        key->code = SMP_KEY_CHAR;
+        key->character = '+';
+        return true;
+    }
+    if (event->wVirtualKeyCode == VK_OEM_MINUS) {
+        key->code = SMP_KEY_CHAR;
+        key->character = '-';
+        return true;
+    }
+
     return false;
 }
 

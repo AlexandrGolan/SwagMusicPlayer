@@ -1,4 +1,4 @@
-﻿/*
+/*
  * SMP - Swag Music Player
  * Playback engine: state machine and a single worker thread.
  *
@@ -13,6 +13,7 @@
 #include "smp/audio.h"
 #include "smp/common.h"
 #include "smp/playlist.h"
+#include "smp/spectrum.h"
 
 typedef enum {
     SMP_PLAYER_STOPPED = 0,
@@ -55,6 +56,9 @@ void smp_player_seek(SmpPlayer *player, double seconds);
 void smp_player_seek_by(SmpPlayer *player, double delta);
 
 void smp_player_set_volume(SmpPlayer *player, int volume);
+
+/* Feeds the decoded signal to a visualiser; pass NULL to detach. */
+void smp_player_set_spectrum(SmpPlayer *player, SmpSpectrum *spectrum);
 int smp_player_volume(SmpPlayer *player);
 
 /* Copies a consistent view of the player state. */

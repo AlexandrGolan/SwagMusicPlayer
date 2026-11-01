@@ -1,4 +1,4 @@
-/*
+﻿/*
  * SMP - Swag Music Player
  * Test runner.
  *
@@ -9,9 +9,11 @@
 int main(void)
 {
     suite_common();
+    suite_config();
     suite_str();
     suite_fs();
     suite_pcm();
+    suite_spectrum();
     suite_tags();
     suite_media();
     suite_playlist();

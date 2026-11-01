@@ -1,4 +1,4 @@
-/*
+﻿/*
  * SMP - Swag Music Player
  * Minimal test harness (no external dependencies).
  *
@@ -89,9 +89,11 @@ void smp_test_end(void);
     } while (0)
 
 void suite_common(void);
+void suite_config(void);
 void suite_str(void);
 void suite_fs(void);
 void suite_pcm(void);
+void suite_spectrum(void);
 void suite_tags(void);
 void suite_media(void);
 void suite_playlist(void);

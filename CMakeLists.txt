@@ -2,7 +2,7 @@
 
 project(
     smp
-    VERSION 2.1.0
+    VERSION 2.2.0
     DESCRIPTION "SMP - a small terminal music player"
     LANGUAGES C
 )
@@ -17,6 +17,7 @@ option(SMP_WERROR "Treat compiler warnings as errors" OFF)
 option(SMP_SANITIZE "Build with AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 option(SMP_STRICT "Enable extra strict warnings" ON)
 option(SMP_REQUIRE_64BIT "Fail the build when the target is not 64-bit" ON)
+option(SMP_LTO "Enable link time optimization for release builds" ON)
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
@@ -82,9 +83,12 @@ add_library(
     smp_core
     STATIC
     src/common.c
+    src/config.c
     src/fs.c
     src/str.c
     src/pcm.c
+    src/fft.c
+    src/spectrum.c
     src/tags.c
     src/media.c
     src/cover.c
@@ -151,6 +155,17 @@ if(WIN32)
     endif()
 endif()
 
+if(SMP_LTO AND NOT MSVC)
+    include(CheckIPOSupported)
+    check_ipo_supported(RESULT SMP_IPO_SUPPORTED OUTPUT SMP_IPO_MESSAGE)
+    if(SMP_IPO_SUPPORTED)
+        set_property(TARGET smp_core PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
+        set_property(TARGET smp PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
+    else()
+        message(STATUS "LTO is not available: ${SMP_IPO_MESSAGE}")
+    endif()
+endif()
+
 install(TARGETS smp RUNTIME DESTINATION bin)
 
 # ---------------------------------------------------------------------------
@@ -164,9 +179,11 @@ if(SMP_BUILD_TESTS)
         tests/test_main.c
         tests/test_support.c
         tests/test_common.c
+        tests/test_config.c
         tests/test_str.c
         tests/test_fs.c
         tests/test_pcm.c
+        tests/test_spectrum.c
         tests/test_tags.c
         tests/test_media.c
         tests/test_playlist.c

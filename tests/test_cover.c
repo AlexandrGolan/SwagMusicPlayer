@@ -1,4 +1,4 @@
-/*
+﻿/*
  * SMP - Swag Music Player
  * Tests for cover discovery and image scaling.
  *
@@ -177,9 +177,58 @@ static void test_cover_discovery(void)
     smp_test_end();
 }
 
+static void test_ascii_art(void)
+{
+    uint8_t pixels[2 * 2 * 4];
+    SmpImage image;
+    char out[16];
+    int index;
+
+    smp_test_begin("ascii art luminance ramp");
+
+    for (index = 0; index < 2 * 2 * 4; index += 4) {
+        pixels[index] = 0;
+        pixels[index + 1] = 0;
+        pixels[index + 2] = 0;
+        pixels[index + 3] = 255;
+    }
+
+    smp_image_init(&image);
+    image.width = 2;
+    image.height = 2;
+    image.pixels = pixels;
+
+    SMP_CHECK(smp_image_to_ascii(&image, 2, 2, out, sizeof(out)));
+    SMP_CHECK_STR(out, "  ");
+
+    for (index = 0; index < 2 * 2 * 4; index += 4) {
+        pixels[index] = 255;
+        pixels[index + 1] = 255;
+        pixels[index + 2] = 255;
+    }
+    SMP_CHECK(smp_image_to_ascii(&image, 2, 2, out, sizeof(out)));
+    SMP_CHECK_STR(out, "@@");
+
+    /* Left column black, right column white (two pixels per column). */
+    pixels[0] = 0;
+    pixels[1] = 0;
+    pixels[2] = 0;
+    pixels[8] = 0;
+    pixels[9] = 0;
+    pixels[10] = 0;
+    SMP_CHECK(smp_image_to_ascii(&image, 2, 1, out, sizeof(out)));
+    SMP_CHECK_STR(out, " @");
+
+    SMP_CHECK(!smp_image_to_ascii(&image, 4, 2, out, sizeof(out)));
+    SMP_CHECK(!smp_image_to_ascii(&image, 2, 2, out, 2));
+    SMP_CHECK_STR(smp_ascii_ramp(), " .:-=+*#%@");
+    smp_test_end();
+}
+
 void suite_cover(void)
 {
     smp_test_suite("cover");
+    test_ascii_art();
     test_image_load();
     test_image_scaling();
     test_cover_discovery();

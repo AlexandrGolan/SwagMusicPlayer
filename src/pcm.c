@@ -10,6 +10,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if defined(__SSE2__) || defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP >= 2)
+#define SMP_HAVE_SSE2 1
+#include <emmintrin.h>
+#endif
+
 #define PCM_MIN_VOLUME 0
 #define PCM_MAX_VOLUME 100
 
@@ -273,9 +278,40 @@ void pcm_apply_gain(int16_t *samples, size_t sample_count, int volume_percent)
     }
 
     volume_percent = pcm_clamp_volume(volume_percent);
+    if (volume_percent >= PCM_MAX_VOLUME) {
+        return;
+    }
+
     factor = (float)volume_percent / (float)PCM_MAX_VOLUME;
 
-    for (index = 0; index < sample_count; index++) {
+#if defined(SMP_HAVE_SSE2)
+    /*
+     * Eight samples per iteration: sign-extend to 32 bits, scale, truncate
+     * towards zero and saturate back to 16 bits. `_mm_cvttps_epi32` keeps the
+     * result identical to the scalar path (which also truncates), so the unit
+     * tests hold for both implementations.
+     */
+    {
+        const __m128 scale = _mm_set1_ps(factor);
+        size_t vector_end = sample_count & ~(size_t)7u;
+
+        for (index = 0; index < vector_end; index += 8) {
+            __m128i packed = _mm_loadu_si128((const __m128i *)(const void *)(samples + index));
+            __m128i sign = _mm_srai_epi16(packed, 15);
+            __m128i low = _mm_unpacklo_epi16(packed, sign);
+            __m128i high = _mm_unpackhi_epi16(packed, sign);
+            __m128i scaled_low = _mm_cvttps_epi32(_mm_mul_ps(_mm_cvtepi32_ps(low), scale));
+            __m128i scaled_high = _mm_cvttps_epi32(_mm_mul_ps(_mm_cvtepi32_ps(high), scale));
+
+            _mm_storeu_si128((__m128i *)(void *)(samples + index),
+                             _mm_packs_epi32(scaled_low, scaled_high));
+        }
+    }
+#else
+    index = 0;
+#endif
+
+    for (; index < sample_count; index++) {
         float scaled = (float)samples[index] * factor;
 
         if (scaled > 32767.0f) {

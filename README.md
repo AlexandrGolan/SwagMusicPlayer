@@ -45,6 +45,9 @@ window, plays WAV and MP3 files, and stays out of the way.
 - Reading of **ID3v2.2/v2.3/v2.4**, **ID3v1** and **RIFF INFO** tags,
   including UTF-16 and CP1251 text
 - Seeking, pause/resume, volume control, natural track ordering
+- Spectrum analyser (FFT, 24 log-spaced bands, cava-style bars) drawn under the cover
+- Own ASCII-art renderer as an alternative to true-colour half blocks
+- Config file for every interface colour (white by default) and a few options
 - UTF-8 aware layout (Cyrillic, CJK, emoji)
 - No flicker: the whole screen is composed in memory and written in one go
 - Portable 64-bit C17 core, unit tested; the platform layer is tiny and isolated
@@ -114,6 +117,40 @@ Twilight/
 в””в”Ђв”Ђ cover.png
 ```
 
+### Configuration
+
+```bash
+smp --init-config      # writes %APPDATA%\smp\smp.conf (or ~/.config/smp/smp.conf)
+smp --config my.conf   # use another file
+smp --no-config        # ignore the file
+```
+
+Every colour is pure white by default (`#FFFFFF`), so the player looks the same
+as before. Keys (case insensitive):
+
+```ini
+# colours: #RRGGBB, #RGB, white, black, default
+text         = #FFFFFF
+accent       = #FFFFFF
+dim          = #FFFFFF
+selection_bg = #FFFFFF
+playing      = #FFFFFF
+error        = #FFFFFF
+progress     = #FFFFFF
+volume_bar   = #FFFFFF
+border       = #FFFFFF
+cover        = #FFFFFF
+spectrum     = #FFFFFF
+
+volume            = 70       # 0..100
+visualizer        = true
+cover_mode        = blocks   # blocks | ascii
+frame_interval_ms = 80       # 16..500
+```
+
+The selection row is drawn inverted when the configured background is too close
+to the text colour, so the default white palette stays readable.
+
 ### Keyboard
 
 | Key | Action |
@@ -124,9 +161,15 @@ Twilight/
 | `в†ђ` / `в†’` | seek 5 seconds |
 | `n` / `p` | next / previous track |
 | `+` / `-`, `PgUp` / `PgDn` | volume |
+| `v` | toggle the visualiser |
+| `a` | switch between block and ASCII cover art |
 | `r` | reload the library |
 | `h`, `?` | help |
 | `q`, `Esc` | quit |
+
+Hotkeys also work on a Russian keyboard layout: the Cyrillic letters on the
+same physical keys (`й`, `ф`, `м`, `т`, `з`, `к`, `р`) are mapped to `q`, `a`,
+`v`, `n`, `p`, `r`, `h`.
 
 ## Project layout
 

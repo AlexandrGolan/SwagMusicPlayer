@@ -1,4 +1,4 @@
-/*
+﻿/*
  * SMP - Swag Music Player
  * Cover art discovery and image scaling.
  *
@@ -38,5 +38,16 @@ SmpStatus smp_image_resize_box(const SmpImage *source, SmpImage *out_image, int 
  * inside `out_path`. Returns SMP_ERR_NOT_FOUND when there is none.
  */
 SmpStatus smp_cover_find(const char *directory, char *out_path, size_t out_size);
+
+/*
+ * Rasterises the image into an ASCII-art grid of `columns` x `rows`
+ * characters. Every cell gets the average colour of the source area it
+ * covers, which is mapped to a luminance ramp. Each row is NUL terminated and
+ * `stride` must be at least `columns + 1`.
+ */
+bool smp_image_to_ascii(const SmpImage *image, int columns, int rows, char *out, size_t stride);
+
+/* The 10 level ramp from darkest to brightest (ASCII art algorithm). */
+const char *smp_ascii_ramp(void);
 
 #endif /* SMP_COVER_H */

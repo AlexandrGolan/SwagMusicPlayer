@@ -10,6 +10,7 @@
 
 #include "smp/audio.h"
 #include "smp/common.h"
+#include "smp/config.h"
 #include "smp/frame.h"
 #include "smp/fs.h"
 #include "smp/pcm.h"
@@ -19,7 +20,7 @@
 #include "smp/term.h"
 #include "smp/ui.h"
 
-#define SMP_VERSION "2.1.0"
+#define SMP_VERSION "2.2.0"
 #define SMP_FRAME_INTERVAL_MS 80
 
 #ifdef _WIN32
@@ -29,8 +30,11 @@ int wmain(int argc, wchar_t **wide_argv);
 typedef struct {
     const char *directory;
     const char *backend;
+    const char *config_path;
     bool list_devices;
     bool render_once;
+    bool no_config;
+    bool init_config;
 } Options;
 
 static void print_usage(const char *program)
@@ -40,6 +44,9 @@ static void print_usage(const char *program)
     printf("Options:\n");
     printf("  -d, --directory <path>  directory with WAV/MP3 files (also positional)\n");
     printf("      --audio <backend>   audio backend: auto, wasapi, alsa, null\n");
+    printf("      --config <path>     read colours and options from this file\n");
+    printf("      --no-config         ignore the configuration file\n");
+    printf("      --init-config       write a commented default config and exit\n");
     printf("      --list-devices      print available output devices and exit\n");
     printf("      --render-once       render one frame to stdout and exit (debug)\n");
     printf("  -h, --help              show this help\n");
@@ -70,6 +77,22 @@ static bool parse_options(int argc, char **argv, Options *options)
         }
         if (strcmp(argument, "--render-once") == 0) {
             options->render_once = true;
+            continue;
+        }
+        if (strcmp(argument, "--no-config") == 0) {
+            options->no_config = true;
+            continue;
+        }
+        if (strcmp(argument, "--init-config") == 0) {
+            options->init_config = true;
+            continue;
+        }
+        if (strcmp(argument, "--config") == 0) {
+            if (index + 1 >= argc) {
+                fprintf(stderr, "smp: %s requires a path\n", argument);
+                return false;
+            }
+            options->config_path = argv[++index];
             continue;
         }
         if (strcmp(argument, "-d") == 0 || strcmp(argument, "--directory") == 0) {
@@ -103,6 +126,62 @@ static bool parse_options(int argc, char **argv, Options *options)
     return true;
 }
 
+/*
+ * Moves the selection by `delta`. When something is already playing the newly
+ * selected track starts at once and the previous one is stopped, which is what
+ * the arrow keys are expected to do in a player.
+ */
+static void select_relative(SmpUiState *ui,
+                            Playlist *playlist,
+                            SmpPlayer *player,
+                            const SmpPlayerSnapshot *snapshot,
+                            int delta)
+{
+    if (playlist->count == 0) {
+        return;
+    }
+
+    smp_playlist_move(playlist, delta);
+    ui->selection = playlist->current;
+
+    if (snapshot->state == SMP_PLAYER_PLAYING || snapshot->state == SMP_PLAYER_PAUSED) {
+        smp_player_play(player, ui->selection);
+    }
+}
+
+/*
+ * Maps the Cyrillic letters that sit on the same physical keys as the Latin
+ * hotkeys, so the player is usable with a Russian keyboard layout.
+ */
+static uint32_t normalize_hotkey(uint32_t character)
+{
+    switch (character) {
+    case 0x0439:
+    case 0x0419:
+        return 'q'; /* Р№ */
+    case 0x0444:
+    case 0x0424:
+        return 'a'; /* С„ */
+    case 0x043c:
+    case 0x041c:
+        return 'v'; /* Рј */
+    case 0x0442:
+    case 0x0422:
+        return 'n'; /* С‚ */
+    case 0x0437:
+    case 0x0417:
+        return 'p'; /* Р· */
+    case 0x043a:
+    case 0x041a:
+        return 'r'; /* Рє */
+    case 0x0440:
+    case 0x0420:
+        return 'h'; /* СЂ */
+    default:
+        return character;
+    }
+}
+
 static void handle_key(SmpKey key,
                        SmpUiState *ui,
                        Playlist *playlist,
@@ -116,17 +195,11 @@ static void handle_key(SmpKey key,
 
     switch (key.code) {
     case SMP_KEY_UP:
-        if (playlist->count > 0) {
-            smp_playlist_move(playlist, -1);
-            ui->selection = playlist->current;
-        }
+        select_relative(ui, playlist, player, &snapshot, -1);
         break;
 
     case SMP_KEY_DOWN:
-        if (playlist->count > 0) {
-            smp_playlist_move(playlist, 1);
-            ui->selection = playlist->current;
-        }
+        select_relative(ui, playlist, player, &snapshot, 1);
         break;
 
     case SMP_KEY_LEFT:
@@ -168,7 +241,7 @@ static void handle_key(SmpKey key,
         break;
 
     case SMP_KEY_CHAR:
-        switch (key.character) {
+        switch (normalize_hotkey(key.character)) {
         case 'q':
         case 'Q':
             *running = false;
@@ -193,6 +266,17 @@ static void handle_key(SmpKey key,
         case 'H':
         case '?':
             ui->show_help = !ui->show_help;
+            break;
+        case 'v':
+        case 'V':
+            ui->theme.show_spectrum = !ui->theme.show_spectrum;
+            smp_ui_set_theme(ui, &ui->theme);
+            break;
+        case 'a':
+        case 'A':
+            ui->theme.cover_mode
+                = ui->theme.cover_mode == SMP_COVER_ASCII ? SMP_COVER_BLOCKS : SMP_COVER_ASCII;
+            smp_ui_set_theme(ui, &ui->theme);
             break;
         case 'r':
         case 'R': {
@@ -248,8 +332,10 @@ static int run_application(const Options *options)
     SmpAudioDevice *device = NULL;
     SmpPlayer *player = NULL;
     SmpUiState ui;
+    SmpSpectrum *spectrum = NULL;
     SmpFrame frame;
     StrBuf output;
+    StrBuf previous;
     SmpAudioFormat format;
     SmpStatus status;
     static const char *const screen_on = "\x1b[?1049h\x1b[?25l\x1b[2J\x1b[H";
@@ -259,10 +345,33 @@ static int run_application(const Options *options)
     int height = 0;
     uint64_t next_frame = 0;
 
+    SmpConfig config;
+    SmpUiTheme theme;
+    SmpStatus config_status;
+    int frame_interval;
+
+    smp_config_defaults(&config);
+
+    if (!options->no_config) {
+        config_status = options->config_path != NULL
+                            ? smp_config_load(&config, options->config_path)
+                            : smp_config_load_user(&config, NULL, 0);
+        if (config_status != SMP_OK && config_status != SMP_ERR_NOT_FOUND) {
+            fprintf(stderr,
+                    "smp: cannot read the configuration (%s), using defaults\n",
+                    smp_status_str(config_status));
+        }
+    }
+
+    frame_interval = config.frame_interval_ms;
+
     smp_playlist_init(&playlist);
     smp_ui_init(&ui);
+    smp_ui_theme_from_config(&theme, &config);
+    smp_ui_set_theme(&ui, &theme);
     smp_frame_init(&frame);
     sb_init(&output);
+    sb_init(&previous);
 
     status = smp_playlist_load(&playlist, options->directory);
     if (status == SMP_ERR_NOT_FOUND) {
@@ -293,12 +402,18 @@ static int run_application(const Options *options)
         goto cleanup;
     }
 
+    spectrum = smp_spectrum_create(SMP_OUTPUT_RATE, 1024);
+
     player = smp_player_create(&playlist, device);
     if (player == NULL) {
         fprintf(stderr, "smp: cannot start the playback engine\n");
         exit_code = 1;
         goto cleanup;
     }
+
+    smp_ui_set_spectrum(&ui, spectrum);
+    smp_player_set_spectrum(player, spectrum);
+    smp_player_set_volume(player, config.volume);
 
     smp_ui_set_directory(&ui, options->directory);
     smp_ui_set_message(&ui, "press space or enter to start", smp_now_ms());
@@ -338,7 +453,7 @@ static int run_application(const Options *options)
     while (running) {
         SmpKey key;
         uint64_t now = smp_now_ms();
-        int timeout = SMP_FRAME_INTERVAL_MS;
+        int timeout = frame_interval;
 
         if (smp_term_poll(&key, timeout)) {
             handle_key(key, &ui, &playlist, player, &running, options);
@@ -386,9 +501,26 @@ static int run_application(const Options *options)
         }
 
         if (now >= next_frame) {
-            next_frame = now + SMP_FRAME_INTERVAL_MS;
+            next_frame = now + (uint64_t)frame_interval;
+
+            if (spectrum != NULL) {
+                float dt = (float)frame_interval / 1000.0f;
+
+                smp_spectrum_update(spectrum, dt);
+            }
+
             render_frame(&frame, &ui, &playlist, player, smp_audio_name(device), &output);
-            smp_term_write(sb_cstr(&output), output.len);
+
+            /* Only touch the terminal when something actually changed. */
+            if (output.len != previous.len
+                || memcmp(sb_cstr(&output), sb_cstr(&previous), output.len) != 0)
+            {
+                StrBuf swap = previous;
+
+                smp_term_write(sb_cstr(&output), output.len);
+                previous = output;
+                output = swap;
+            }
         }
     }
 
@@ -396,10 +528,12 @@ cleanup:
     if (player != NULL) {
         smp_player_destroy(player);
     }
+    smp_spectrum_destroy(spectrum);
     smp_audio_close(device);
     smp_term_shutdown();
     smp_frame_free(&frame);
     sb_free(&output);
+    sb_free(&previous);
     smp_ui_free(&ui);
     smp_playlist_free(&playlist);
     return exit_code;
@@ -419,11 +553,52 @@ static int smp_main_entry(int argc, char **argv)
         return 0;
     }
 
+    if (options.init_config) {
+        char *path = smp_config_user_path();
+        SmpStatus write_status;
+        char *directory;
+
+        if (path == NULL) {
+            fprintf(stderr, "smp: cannot resolve the configuration path\n");
+            return 1;
+        }
+
+        directory = smp_strdup(path);
+        if (directory != NULL) {
+            char *separator = strrchr(directory, '/');
+#ifdef _WIN32
+            {
+                char *backslash = strrchr(directory, '\\');
+
+                if (backslash != NULL && (separator == NULL || backslash > separator)) {
+                    separator = backslash;
+                }
+            }
+#endif
+            if (separator != NULL) {
+                *separator = '\0';
+                (void)smp_dir_create(directory);
+            }
+            free(directory);
+        }
+
+        write_status = smp_config_write_template(path);
+        if (write_status == SMP_OK) {
+            printf("wrote %s\n", path);
+        } else if (write_status == SMP_ERR_IO) {
+            fprintf(stderr, "smp: %s already exists\n", path);
+        } else {
+            fprintf(stderr, "smp: cannot write %s\n", path);
+        }
+        free(path);
+        return write_status == SMP_OK ? 0 : 1;
+    }
     if (options.directory == NULL) {
         fprintf(stderr, "smp: no music directory given\n\n");
         print_usage(argv[0]);
         return 2;
     }
+
 
     return run_application(&options);
 }
