@@ -4,7 +4,7 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [2.0.0] вЂ” 2026-11-01
+## [2.0.0] — 2026-11-01
 
 Complete rewrite of the 1.x codebase. The user interface, the keyboard layout
 and the "one directory = one album" model are preserved.
@@ -13,7 +13,7 @@ and the "one directory = one album" model are preserved.
 
 - Windows support through a WASAPI backend; the player now builds and runs on
   Linux and Windows from the same sources.
-- Seeking (`в†ђ`/`в†’`, `smp_player_seek`), volume control in software, library
+- Seeking (`←`/`→`, `smp_player_seek`), volume control in software, library
   reload (`r`) and a help overlay (`?`).
 - Built-in cover art rendering with true-colour half blocks. No `tiv`, no
   ImageMagick, no subprocesses.
@@ -29,12 +29,12 @@ and the "one directory = one album" model are preserved.
 
 ### Changed
 
-- C99 в†’ C17; fixed-size buffers replaced with owned strings.
+- C99 → C17; fixed-size buffers replaced with owned strings.
 - One persistent worker thread with a mutex/condition variable instead of
   ad-hoc thread creation on every track change.
 - The screen is composed as a cell grid and written in one pass instead of
   `printf` per character with a full clear on every frame.
-- Build system: hand-written `Makefile` в†’ CMake with `pkg-config`, install
+- Build system: hand-written `Makefile` → CMake with `pkg-config`, install
   rules and sanitizer presets.
 - WAV and MP3 decoding moved to the vendored `dr_wav`/`dr_mp3`, dropping the
   `libsndfile`, `libmpg123` and `taglib` dependencies.
@@ -59,6 +59,6 @@ and the "one directory = one album" model are preserved.
 - `Makefile` and `shell.nix` (replaced by CMake).
 - Dead declarations (`count_visible_chars`) and duplicated globals.
 
-## [1.0.0] вЂ” 2025-11-30
+## [1.0.0] — 2025-11-30
 
 - Initial release: WAV/MP3 playback, playlist, cover art through `tiv`.

@@ -12,7 +12,7 @@ the playlist in a single terminal window.
 - 64-bit build; file offsets, sizes and sample positions are 64-bit
 - audio output through miniaudio: WASAPI, ALSA, PulseAudio, CoreAudio
 - cover art rendered with half-block characters or as ASCII art
-- seven band spectrum analyser (55 Hz вЂ“ 3348 Hz) with cava-style dynamics
+- seven band spectrum analyser (55 Hz – 3348 Hz) with cava-style dynamics
 - tags: ID3v2.2/2.3/2.4, ID3v1, RIFF INFO, Vorbis comments
 - configuration file for every interface colour and a few options
 - no external processes and no runtime dependencies besides the system audio
@@ -26,7 +26,7 @@ vendored in `vendor/` and compiled into the binary.
 | Library | Version | Used for | License |
 | --- | --- | --- | --- |
 | [miniaudio](https://github.com/mackron/miniaudio) | 0.11.26 | audio device output, device enumeration and the lock-free ring buffer between the playback thread and the device callback | MIT-0 / public domain |
-| [dr_wav](https://github.com/mackron/dr_libs) | 0.14.6 | WAV decoding (PCM, float, A-Law, Вµ-Law, ADPCM) | public domain |
+| [dr_wav](https://github.com/mackron/dr_libs) | 0.14.6 | WAV decoding (PCM, float, A-Law, µ-Law, ADPCM) | public domain |
 | [dr_mp3](https://github.com/mackron/dr_libs) | 0.7.4 | MP3 decoding | public domain |
 | [dr_flac](https://github.com/mackron/dr_libs) | 0.13.4 | FLAC decoding | public domain |
 | [stb_vorbis](https://github.com/nothings/stb) | 1.22 | Ogg Vorbis decoding | public domain / MIT |
@@ -49,7 +49,7 @@ cmake --build --preset default
 ctest --preset default
 ```
 
-Requirements: CMake в‰Ґ 3.20, Ninja, a 64-bit C17 compiler. On Linux also
+Requirements: CMake ≥ 3.20, Ninja, a 64-bit C17 compiler. On Linux also
 `pkg-config` and the ALSA headers (`libasound2-dev`).
 
 Windows (MSYS2):
@@ -92,10 +92,10 @@ named `cover`, `album`, `folder`, `front` or `art` (`png`, `jpg`, `jpeg`,
 
 | Key | Action |
 | --- | --- |
-| `в†‘` / `в†“` | move the selection (starts it immediately while playing) |
+| `↑` / `↓` | move the selection (starts it immediately while playing) |
 | `Enter` | play the selected track |
 | `Space` | play / pause |
-| `в†ђ` / `в†’` | seek 5 seconds |
+| `←` / `→` | seek 5 seconds |
 | `n` / `p` | next / previous track |
 | `+` / `-`, `PgUp` / `PgDn` | volume |
 | `v` | toggle the visualiser |
@@ -147,5 +147,5 @@ the module boundaries.
 
 ## License
 
-MIT вЂ” see [LICENSE](LICENSE). The vendored libraries keep their own licenses,
+MIT — see [LICENSE](LICENSE). The vendored libraries keep their own licenses,
 see [vendor/README.md](vendor/README.md).
