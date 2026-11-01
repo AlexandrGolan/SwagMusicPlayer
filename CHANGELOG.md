@@ -1,4 +1,4 @@
-﻿# Changelog
+# Changelog
 
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
@@ -25,7 +25,7 @@ and the "one directory = one album" model are preserved.
   for Linux and Windows.
 - CMake presets, `--help`, `--version`,
   `--list-devices`, `--audio <backend>`.
-- Documentation: `docs/ARCHITECTURE.md` and `docs/AUDIT.md`.
+- Documentation: `docs/ARCHITECTURE.md`.
 
 ### Changed
 
@@ -52,8 +52,6 @@ and the "one directory = one album" model are preserved.
 - Terminal left in raw mode (no echo, hidden cursor) after `Ctrl+C` or errors.
 - Resource leaks on every early-exit path.
 - `system("which tiv")` being executed on every redraw.
-
-See [docs/AUDIT.md](docs/AUDIT.md) for the full list with locations.
 
 ### Removed
 

@@ -1,4 +1,4 @@
-﻿# Vendored libraries
+# Vendored libraries
 
 These single-header libraries are checked in so the player builds without any
 downloaded dependency. They are compiled in exactly one translation unit,

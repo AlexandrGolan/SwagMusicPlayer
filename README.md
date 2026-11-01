@@ -1,4 +1,4 @@
-﻿# SMP-Swag Music Player
+# SMP-Swag Music Player
 
 Terminal music player written entirely in C (C17). Plays WAV, MP3, FLAC and
 Ogg Vorbis files and shows the album cover, a seven band spectrum analyser and
@@ -139,11 +139,11 @@ src/plat/      terminal and thread backends (POSIX / Win32)
 src/audio/     audio output (miniaudio)
 vendor/        single-header libraries
 tests/         unit tests, run by CTest
-docs/          architecture notes and the audit of the 1.x code
+docs/          architecture notes and screenshots
 ```
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the threading model and
-[docs/AUDIT.md](docs/AUDIT.md) for the defects fixed during the rewrite.
+the module boundaries.
 
 ## License
 
