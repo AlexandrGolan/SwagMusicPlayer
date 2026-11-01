@@ -1,4 +1,4 @@
-﻿# Architecture
+# Architecture
 
 ## Goals
 
@@ -13,33 +13,33 @@
 ## Module graph
 
 ```
-                    в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ
-                    в”‚  main.c   в”‚  argument parsing, event loop
-                    в””в”Ђв”Ђв”Ђв”Ђв”Ђв”¬в”Ђв”Ђв”Ђв”Ђв”Ђв”
-          в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”јв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ
-          в”‚               в”‚                в”‚
-    в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв–јв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ   в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв–јв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ    в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв–јв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ
-    в”‚    ui.c   в”‚   в”‚ player.c  в”‚    в”‚  term.c   в”‚
-    в”‚ layout,   в”‚   в”‚ state +   в”‚    в”‚ raw mode, в”‚
-    в”‚ painting  в”‚   в”‚ worker    в”‚    в”‚ input     в”‚
-    в””в”Ђв”Ђв”Ђв”Ђв”Ђв”¬в”Ђв”Ђв”Ђв”Ђв”Ђв”   в””в”Ђв”Ђв”Ђв”Ђв”Ђв”¬в”Ђв”Ђв”Ђв”Ђв”Ђв”    в””в”Ђв”Ђв”Ђв”Ђв”Ђв”¬в”Ђв”Ђв”Ђв”Ђв”Ђв”
-          в”‚               в”‚                в”‚
-    в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв–јв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ   в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв–јв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ    в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв–јв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ
-    в”‚ frame.c   в”‚   в”‚  pcm.c    в”‚    в”‚ thread.c  в”‚
-    в”‚ cells в†’   в”‚   в”‚ channels, в”‚    в”‚ mutex,    в”‚
-    в”‚ ANSI      в”‚   в”‚ resample  в”‚    в”‚ cond,     в”‚
-    в””в”Ђв”Ђв”Ђв”Ђв”Ђв”¬в”Ђв”Ђв”Ђв”Ђв”Ђв”   в””в”Ђв”Ђв”Ђв”Ђв”Ђв”¬в”Ђв”Ђв”Ђв”Ђв”Ђв”    в”‚ join      в”‚
-          в”‚               в”‚          в””в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”
-    в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв–јв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ   в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв–јв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ
-    в”‚ cover.c   в”‚   в”‚ media.c   в”‚
-    в”‚ stb_image в”‚   в”‚ dr_wav /  в”‚
-    в”‚ + box     в”‚   в”‚ dr_mp3    в”‚
-    в””в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”   в””в”Ђв”Ђв”Ђв”Ђв”Ђв”¬в”Ђв”Ђв”Ђв”Ђв”Ђв”
-                          в”‚
-                 в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв–јв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ
-                 в”‚ playlist.c      в”‚  scan, tags, natural sort
-                 в”‚ tags.c, fs.c    в”‚
-                 в””в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”
+                    ┌───────────┐
+                    │  main.c   │  argument parsing, event loop
+                    └─────┬─────┘
+          ┌───────────────┼────────────────┐
+          │               │                │
+    ┌─────▼─────┐   ┌─────▼─────┐    ┌─────▼─────┐
+    │    ui.c   │   │ player.c  │    │  term.c   │
+    │ layout,   │   │ state +   │    │ raw mode, │
+    │ painting  │   │ worker    │    │ input     │
+    └─────┬─────┘   └─────┬─────┘    └─────┬─────┘
+          │               │                │
+    ┌─────▼─────┐   ┌─────▼─────┐    ┌─────▼─────┐
+    │ frame.c   │   │  pcm.c    │    │ thread.c  │
+    │ cells →   │   │ channels, │    │ mutex,    │
+    │ ANSI      │   │ resample  │    │ cond,     │
+    └─────┬─────┘   └─────┬─────┘    │ join      │
+          │               │          └───────────┘
+    ┌─────▼─────┐   ┌─────▼─────┐
+    │ cover.c   │   │ media.c   │
+    │ stb_image │   │ dr_wav /  │
+    │ + box     │   │ dr_mp3    │
+    └───────────┘   └─────┬─────┘
+                          │
+                 ┌────────▼────────┐
+                 │ playlist.c      │  scan, tags, natural sort
+                 │ tags.c, fs.c    │
+                 └─────────────────┘
 ```
 
 `audio/audio_miniaudio.c` is the only audio backend: miniaudio picks WASAPI,
@@ -52,23 +52,23 @@ them.
 
 There are exactly two threads.
 
-**UI thread** вЂ” owns the `SmpFrame`, polls the terminal and handles keys.
+**UI thread** — owns the `SmpFrame`, polls the terminal and handles keys.
 It never touches the decoder.
 
-**Worker thread** вЂ” owns the `SmpMedia` decoder, the `PcmConverter` and the
+**Worker thread** — owns the `SmpMedia` decoder, the `PcmConverter` and the
 audio device. It is created once and joined once.
 
 All shared state lives in `SmpPlayer` behind one mutex:
 
 ```
 UI thread                            worker thread
-в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ                            в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+─────────                            ─────────────
 play(index)                          wait for state == PLAYING
-  lock: index, generation++,  в”Ђв”Ђв”Ђв”Ђв”Ђв–є
+  lock: index, generation++,  ─────►
         state = PLAYING, signal
                                      open decoder, publish duration
 snapshot()                           loop:
-  lock: copy state, position    в—„в”Ђв”Ђв”Ђв”Ђ   lock: check quit/generation/seek
+  lock: copy state, position    ◄────   lock: check quit/generation/seek
         unlock                          read + convert + write (no lock)
                                         lock: position = media position
 ```
@@ -88,15 +88,15 @@ Rules that keep it simple:
 ## Audio pipeline
 
 ```
-file в”Ђв”Ђв–є dr_wav / dr_mp3 в”Ђв”Ђв–є int16 interleaved, native rate/channels
-                                    в”‚
+file ──► dr_wav / dr_mp3 ──► int16 interleaved, native rate/channels
+                                    │
                               pcm_converter
                         channel map + linear resample
-                                    в”‚
+                                    │
                              int16 stereo 48 kHz
-                                    в”‚
+                                    │
                              pcm_apply_gain
-                                    в”‚
+                                    │
                         ALSA / WASAPI / null backend
 ```
 
@@ -118,7 +118,7 @@ flicker, keeps a redraw at ~12 fps cheap, and makes it impossible to leave a
 half-updated screen.
 
 Wide characters occupy two cells; the second is marked as a continuation and
-is skipped by the renderer. Cover art uses the upper-half block `в–Ђ` with the
+is skipped by the renderer. Cover art uses the upper-half block `▀` with the
 top pixel as foreground and the bottom pixel as background, so one cell shows
 two vertical pixels.
 
@@ -153,8 +153,8 @@ Coverage per module:
 
 Adding a platform means implementing two small interfaces:
 
-- `term.h` вЂ” raw mode, size, key polling, output.
-- `audio.h` (through `audio_internal.h`) вЂ” open/write/drain/close.
+- `term.h` — raw mode, size, key polling, output.
+- `audio.h` (through `audio_internal.h`) — open/write/drain/close.
 
 The rest of the tree builds unchanged. `thread.h` already has pthreads and
 Win32 implementations; C11 `<threads.h>` could replace both if the compiler
