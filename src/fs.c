@@ -1,4 +1,4 @@
-﻿/*
+/*
  * SMP - Swag Music Player
  * Portable file system helpers (POSIX + Win32).
  *
@@ -23,6 +23,7 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <unistd.h>
 #endif
 
 struct SmpDir {
