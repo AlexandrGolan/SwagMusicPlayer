@@ -363,7 +363,14 @@ static int run_application(const Options *options)
         }
     }
 
+    /*
+     * The visualiser needs a higher frame rate to look fluid; keep the
+     * caller's value for the rest of the interface.
+     */
     frame_interval = config.frame_interval_ms;
+    if (config.visualizer && frame_interval > 33) {
+        frame_interval = 33;
+    }
 
     smp_playlist_init(&playlist);
     smp_ui_init(&ui);

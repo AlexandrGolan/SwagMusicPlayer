@@ -1,4 +1,4 @@
-/*
+﻿/*
  * SMP - Swag Music Player
  * Logarithmic FFT spectrum analyser for the bar visualiser.
  *
@@ -10,7 +10,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define SMP_SPECTRUM_BANDS 24
+#define SMP_SPECTRUM_BANDS 16
 
 typedef struct SmpSpectrum SmpSpectrum;
 

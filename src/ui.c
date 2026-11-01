@@ -370,13 +370,9 @@ static void draw_cover(SmpUiState *state, SmpFrame *frame, int x, int y, int wid
         return;
     }
 
-    /* Two vertical pixels per terminal cell; keep the aspect ratio. */
-    cells_y = SMP_MIN(height, width / 2);
-    cells_x = cells_y * 2;
-    if (cells_x > width) {
-        cells_x = width;
-        cells_y = cells_x / 2;
-    }
+    /* Fill the whole panel: the image is cropped, never letterboxed. */
+    cells_x = width;
+    cells_y = height;
     if (cells_x < 2 || cells_y < 1) {
         return;
     }
@@ -384,7 +380,7 @@ static void draw_cover(SmpUiState *state, SmpFrame *frame, int x, int y, int wid
     {
         if (state->cover_scaled_width != cells_x || state->cover_scaled_height != cells_y * 2) {
             smp_image_free(&state->cover_scaled);
-            if (smp_image_resize_box(&state->cover, &state->cover_scaled, cells_x, cells_y * 2)
+            if (smp_image_fill_box(&state->cover, &state->cover_scaled, cells_x, cells_y * 2)
                 != SMP_OK)
             {
                 state->cover_scaled_width = 0;
@@ -395,8 +391,8 @@ static void draw_cover(SmpUiState *state, SmpFrame *frame, int x, int y, int wid
             state->cover_scaled_height = cells_y * 2;
         }
 
-        offset_x = x + (width - cells_x) / 2;
-        offset_y = y + (height - cells_y) / 2;
+        offset_x = x;
+        offset_y = y;
 
         for (row = 0; row < cells_y; row++) {
             int column;
@@ -428,14 +424,19 @@ static void draw_cover(SmpUiState *state, SmpFrame *frame, int x, int y, int wid
     }
 }
 
-/* Cava style bars: one column group per band, bottom aligned, with a peak dot. */
+/* Cava style bars: wide columns, right aligned, with sub-cell precision. */
 static void draw_spectrum(SmpUiState *state, SmpFrame *frame, int x, int y, int width, int height)
 {
+    /* Unicode block elements from 1/8 to 8/8 of a cell. */
+    static const uint32_t partials[8]
+        = {0x2581u, 0x2582u, 0x2583u, 0x2584u, 0x2585u, 0x2586u, 0x2587u, 0x2588u};
     size_t bands;
     size_t band;
     int bar_width;
+    int block_width;
+    int start_x;
 
-    if (state->spectrum == NULL || height < 2 || width < 8) {
+    if (state->spectrum == NULL || height < 1 || width < 16) {
         return;
     }
 
@@ -444,37 +445,43 @@ static void draw_spectrum(SmpUiState *state, SmpFrame *frame, int x, int y, int 
         return;
     }
 
+    /* Wide bars with a one column gap, the whole group pushed to the right. */
     bar_width = width / (int)bands;
-    if (bar_width < 1) {
-        bar_width = 1;
+    if (bar_width < 2) {
+        bar_width = 2;
     }
+    block_width = bar_width - 1;
+    start_x = x + width - (int)bands * bar_width;
 
     for (band = 0; band < bands; band++) {
-        int bar_x = x + (int)band * bar_width;
-        int columns = bar_width > 1 ? bar_width - 1 : 1;
+        int bar_x = start_x + (int)band * bar_width;
         float value = smp_spectrum_band(state->spectrum, band);
-        float peak = smp_spectrum_peak(state->spectrum, band);
-        int bar_height = (int)(value * (float)height + 0.5f);
-        int peak_row = (int)(peak * (float)(height - 1) + 0.5f);
+        int eighths;
+        int full_rows;
+        int remainder;
         int row;
-        int column;
 
-        if (bar_x + columns > x + width) {
+        if (bar_x + block_width > x + width) {
             break;
         }
-        if (bar_height > height) {
-            bar_height = height;
-        }
-        if (peak_row > height - 1) {
-            peak_row = height - 1;
+
+        eighths = (int)(value * (float)(height * 8) + 0.5f);
+        full_rows = eighths / 8;
+        remainder = eighths % 8;
+
+        if (full_rows > height) {
+            full_rows = height;
+            remainder = 0;
         }
 
-        for (row = 0; row < bar_height; row++) {
-            for (column = 0; column < columns; column++) {
+        for (row = 0; row < full_rows; row++) {
+            int column;
+
+            for (column = 0; column < block_width; column++) {
                 smp_frame_put_cell(frame,
                                    bar_x + column,
                                    y + height - 1 - row,
-                                   0x2588u, /* full block */
+                                   0x2588u,
                                    g_theme.spectrum.r,
                                    g_theme.spectrum.g,
                                    g_theme.spectrum.b,
@@ -485,12 +492,14 @@ static void draw_spectrum(SmpUiState *state, SmpFrame *frame, int x, int y, int 
             }
         }
 
-        if (peak > 0.03f && peak_row >= bar_height) {
-            for (column = 0; column < columns; column++) {
+        if (remainder > 0 && full_rows < height) {
+            int column;
+
+            for (column = 0; column < block_width; column++) {
                 smp_frame_put_cell(frame,
                                    bar_x + column,
-                                   y + height - 1 - peak_row,
-                                   0x2580u, /* upper half block */
+                                   y + height - 1 - full_rows,
+                                   partials[remainder - 1],
                                    g_theme.spectrum.r,
                                    g_theme.spectrum.g,
                                    g_theme.spectrum.b,
@@ -821,7 +830,6 @@ void smp_ui_render(SmpUiState *state,
     int left_width;
     int right_x;
     int right_width;
-    int playlist_rows;
     int playlist_y;
 
     if (state == NULL || frame == NULL || playlist == NULL || player == NULL || frame->cells == NULL) {
@@ -878,28 +886,12 @@ void smp_ui_render(SmpUiState *state,
         draw_header(frame, &inactive);
         draw_separator(frame, 1, 0, frame->width);
 
-        /* Left panel: cover art, with the visualiser underneath. */
+        /* Left panel: the cover fills the whole panel, no letterboxing. */
         {
             int panel_top = 3;
             int panel_height = frame->height - 4 - panel_top + 1;
-            int spectrum_height = 0;
-            int cover_height;
 
-            if (state->spectrum != NULL && state->theme.show_spectrum && panel_height > 12) {
-                spectrum_height = SMP_MIN(9, panel_height / 3);
-            }
-            cover_height = panel_height - spectrum_height;
-
-            draw_cover(state, frame, 1, panel_top, left_width - 2, cover_height);
-
-            if (spectrum_height > 1) {
-                draw_spectrum(state,
-                              frame,
-                              1,
-                              panel_top + cover_height + 1,
-                              left_width - 2,
-                              spectrum_height - 1);
-            }
+            draw_cover(state, frame, 1, panel_top, left_width - 2, panel_height);
         }
         draw_separator(frame, 2, 0, frame->width);
 
@@ -916,12 +908,33 @@ void smp_ui_render(SmpUiState *state,
 
     playlist_y = 9;
 
-    playlist_y = 9;
-    playlist_rows = frame->height - playlist_y - 3;
-    if (playlist_rows < 1) {
-        playlist_rows = 1;
+    /* The visualiser lives in the bottom right corner of the right panel. */
+    {
+        int spectrum_height = 0;
+        int playlist_bottom = frame->height - 4;
+        int item_rows;
+
+        if (state->spectrum != NULL && state->theme.show_spectrum && playlist_bottom - playlist_y > 8) {
+            spectrum_height = SMP_MIN(5, (playlist_bottom - playlist_y) / 3);
+            playlist_bottom -= spectrum_height + 1;
+        }
+
+        item_rows = playlist_bottom - playlist_y;
+        if (item_rows < 1) {
+            item_rows = 1;
+        }
+        draw_playlist(state, frame, right_x, playlist_y, right_width, item_rows, playlist, player);
+
+        if (spectrum_height > 0) {
+            draw_separator(frame, frame->height - 4 - spectrum_height, right_x, right_width);
+            draw_spectrum(state,
+                          frame,
+                          right_x,
+                          frame->height - 4 - spectrum_height + 1,
+                          right_width,
+                          spectrum_height);
+        }
     }
-    draw_playlist(state, frame, right_x, playlist_y, right_width, playlist_rows - 1, playlist, player);
 
     /* Vertical separator between the panels. */
     {

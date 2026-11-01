@@ -160,6 +160,115 @@ SmpStatus smp_image_resize_box(const SmpImage *source, SmpImage *out_image, int 
     return SMP_OK;
 }
 
+SmpStatus smp_image_fill_box(const SmpImage *source, SmpImage *out_image, int width, int height)
+{
+    uint8_t *pixels;
+    double target_ratio;
+    double source_ratio;
+    int crop_w;
+    int crop_h;
+    int offset_x;
+    int offset_y;
+    int x;
+    int y;
+
+    if (source == NULL || out_image == NULL || source->pixels == NULL) {
+        return SMP_ERR_INVALID_ARG;
+    }
+    if (width <= 0 || height <= 0) {
+        return SMP_ERR_INVALID_ARG;
+    }
+
+    smp_image_init(out_image);
+
+    target_ratio = (double)width / (double)height;
+    source_ratio = (double)source->width / (double)source->height;
+
+    crop_w = source->width;
+    crop_h = source->height;
+    if (source_ratio > target_ratio) {
+        crop_w = (int)((double)crop_h * target_ratio + 0.5);
+    } else {
+        crop_h = (int)((double)crop_w / target_ratio + 0.5);
+    }
+    if (crop_w > source->width) {
+        crop_w = source->width;
+    }
+    if (crop_h > source->height) {
+        crop_h = source->height;
+    }
+    if (crop_w <= 0 || crop_h <= 0) {
+        return SMP_ERR_INVALID_ARG;
+    }
+
+    offset_x = (source->width - crop_w) / 2;
+    offset_y = (source->height - crop_h) / 2;
+
+    pixels = (uint8_t *)malloc((size_t)width * (size_t)height * 4u);
+    if (pixels == NULL) {
+        return SMP_ERR_OUT_OF_MEMORY;
+    }
+
+    for (y = 0; y < height; y++) {
+        int sy0 = offset_y + (int)((double)y * (double)crop_h / (double)height);
+        int sy1 = offset_y + (int)((double)(y + 1) * (double)crop_h / (double)height);
+
+        if (sy1 <= sy0) {
+            sy1 = sy0 + 1;
+        }
+        if (sy1 > source->height) {
+            sy1 = source->height;
+        }
+
+        for (x = 0; x < width; x++) {
+            int sx0 = offset_x + (int)((double)x * (double)crop_w / (double)width);
+            int sx1 = offset_x + (int)((double)(x + 1) * (double)crop_w / (double)width);
+            uint32_t sum[4] = {0, 0, 0, 0};
+            uint32_t count = 0;
+            int sample_x;
+            int sample_y;
+            int channel;
+
+            if (sx1 <= sx0) {
+                sx1 = sx0 + 1;
+            }
+            if (sx1 > source->width) {
+                sx1 = source->width;
+            }
+
+            for (sample_y = sy0; sample_y < sy1; sample_y++) {
+                for (sample_x = sx0; sample_x < sx1; sample_x++) {
+                    const uint8_t *pixel
+                        = source->pixels
+                          + ((size_t)sample_y * (size_t)source->width + (size_t)sample_x) * 4u;
+
+                    for (channel = 0; channel < 4; channel++) {
+                        sum[channel] += pixel[channel];
+                    }
+                    count++;
+                }
+            }
+
+            if (count == 0) {
+                count = 1;
+            }
+
+            {
+                uint8_t *target = pixels + ((size_t)y * (size_t)width + (size_t)x) * 4u;
+
+                for (channel = 0; channel < 4; channel++) {
+                    target[channel] = (uint8_t)(sum[channel] / count);
+                }
+            }
+        }
+    }
+
+    out_image->width = width;
+    out_image->height = height;
+    out_image->pixels = pixels;
+    return SMP_OK;
+}
+
 const char *smp_ascii_ramp(void)
 {
     return " .:-=+*#%@";

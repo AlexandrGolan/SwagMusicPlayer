@@ -1,4 +1,4 @@
-/*
+﻿/*
  * SMP - Swag Music Player
  * Tests for the FFT and spectrum analyser.
  *
@@ -14,7 +14,9 @@
 #define TEST_RATE 48000
 #define TEST_WINDOW 1024
 #define TEST_PI 3.14159265358979323846
-#define TEST_440_BAND 9
+/* The bands are log spaced from 40 Hz to 16 kHz; derive the index instead of hardcoding it. */
+#define TEST_440_BAND                                                                          \
+    ((size_t)((log(440.0 / 40.0) / log(16000.0 / 40.0)) * (double)SMP_SPECTRUM_BANDS))
 #define TEST_FAR_BAND (SMP_SPECTRUM_BANDS - 1)
 
 void suite_spectrum(void);
@@ -342,9 +344,54 @@ static void test_spectrum_invalid(void)
     smp_test_end();
 }
 
+static void test_gravity_decay(void)
+{
+    SmpSpectrum *spectrum;
+    int16_t tone[TEST_WINDOW];
+    int16_t silence[TEST_WINDOW];
+    float loud;
+    float after_one;
+    float after_many;
+    int iteration;
+
+    smp_test_begin("bars fall like cava instead of snapping down");
+    spectrum = smp_spectrum_create(TEST_RATE, TEST_WINDOW);
+    SMP_CHECK(spectrum != NULL);
+    if (spectrum == NULL) {
+        smp_test_end();
+        return;
+    }
+
+    fill_sine(tone, (size_t)TEST_WINDOW, 440.0, 24000.0, 0);
+    fill_sine(silence, (size_t)TEST_WINDOW, 440.0, 0.0, 0);
+
+    smp_spectrum_feed(spectrum, tone, TEST_WINDOW);
+    for (iteration = 0; iteration < 30; iteration++) {
+        smp_spectrum_update(spectrum, 1.0f / 60.0f);
+    }
+    loud = smp_spectrum_band(spectrum, TEST_440_BAND);
+    SMP_CHECK(loud > 0.5f);
+
+    smp_spectrum_feed(spectrum, silence, TEST_WINDOW);
+    smp_spectrum_update(spectrum, 1.0f / 60.0f);
+    after_one = smp_spectrum_band(spectrum, TEST_440_BAND);
+    SMP_CHECK(after_one > loud * 0.5f);
+
+    for (iteration = 0; iteration < 40; iteration++) {
+        smp_spectrum_update(spectrum, 1.0f / 60.0f);
+    }
+    after_many = smp_spectrum_band(spectrum, TEST_440_BAND);
+    SMP_CHECK(after_many < after_one);
+    SMP_CHECK(after_many < 0.2f);
+
+    smp_spectrum_destroy(spectrum);
+    smp_test_end();
+}
+
 void suite_spectrum(void)
 {
     smp_test_suite("spectrum");
+    test_gravity_decay();
     test_fft_sine_bin();
     test_fft_silence();
     test_hann_window();

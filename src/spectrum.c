@@ -1,4 +1,4 @@
-/*
+﻿/*
  * SMP - Swag Music Player
  * Spectrum analyser: FFT bands, smoothing and peak markers.
  *
@@ -17,8 +17,14 @@
 #define SMP_SPECTRUM_MIN_HZ 40.0
 #define SMP_SPECTRUM_MAX_HZ 16000.0
 #define SMP_SPECTRUM_DB_FLOOR (-70.0)
-#define SMP_SPECTRUM_RISE 0.65f
-#define SMP_SPECTRUM_FALL 0.12f
+/*
+ * Bar dynamics follow cava (cavacore.c): the bar jumps straight to a new peak,
+ * falls with an accelerating "gravity" term and is then smoothed by a first
+ * order integrator, which is what makes cava look fluid instead of stepped.
+ */
+#define SMP_CAVA_NOISE_REDUCTION 0.77f
+#define SMP_CAVA_FALL_STEP 0.028f
+#define SMP_CAVA_REFERENCE_RATE 66.0f
 #define SMP_SPECTRUM_PEAK_FALL 0.35f
 #define SMP_SPECTRUM_PEAK_HOLD 1.0f
 #define SMP_SPECTRUM_FULL_SCALE 32768.0
@@ -43,6 +49,12 @@ struct SmpSpectrum {
     float bands[SMP_SPECTRUM_BANDS];
     float peaks[SMP_SPECTRUM_BANDS];
     float hold[SMP_SPECTRUM_BANDS];
+
+    /* cava style dynamics state */
+    float previous[SMP_SPECTRUM_BANDS];
+    float fall[SMP_SPECTRUM_BANDS];
+    float memory[SMP_SPECTRUM_BANDS];
+    float peak_value[SMP_SPECTRUM_BANDS];
 };
 
 static bool spectrum_is_power_of_two(size_t value)
@@ -249,6 +261,23 @@ void smp_spectrum_update(SmpSpectrum *spectrum, float dt_seconds)
     smp_fft_hann_window(spectrum->real, spectrum->window_size);
     smp_fft(spectrum->real, spectrum->imaginary, spectrum->window_size);
 
+    double framerate_mod;
+    double gravity_mod;
+    double integral_mod;
+
+    {
+        float framerate = delta_time > 0.0f ? 1.0f / delta_time : SMP_CAVA_REFERENCE_RATE;
+
+        if (framerate < 1.0f) {
+            framerate = 1.0f;
+        } else if (framerate > 240.0f) {
+            framerate = 240.0f;
+        }
+        framerate_mod = (double)SMP_CAVA_REFERENCE_RATE / (double)framerate;
+        gravity_mod = pow(framerate_mod, 2.5) * 2.0 / (double)SMP_CAVA_NOISE_REDUCTION;
+        integral_mod = pow(framerate_mod, 0.1);
+    }
+
     for (index = 0; index < SMP_SPECTRUM_BANDS; index++) {
         size_t bin;
         float magnitude = 0.0f;
@@ -266,12 +295,31 @@ void smp_spectrum_update(SmpSpectrum *spectrum, float dt_seconds)
 
         target = spectrum_band_level(magnitude, spectrum->window_size);
 
-        band = spectrum->bands[index];
-        if (target > band) {
-            band += (target - band) * SMP_SPECTRUM_RISE;
+        /*
+         * cava: instant rise to the peak, accelerating gravity fall otherwise,
+         * followed by an integral (memory) term. Kept in double precision to
+         * avoid visible drift at 30 fps.
+         */
+        band = target;
+        if (band < spectrum->previous[index]) {
+            double gravity = (double)spectrum->peak_value[index]
+                             * (1.0 - (double)spectrum->fall[index] * (double)spectrum->fall[index]
+                                          * gravity_mod);
+
+            if (gravity < 0.0) {
+                gravity = 0.0;
+            }
+            band = (float)gravity;
+            spectrum->fall[index] += SMP_CAVA_FALL_STEP;
         } else {
-            band += (target - band) * SMP_SPECTRUM_FALL;
+            spectrum->peak_value[index] = band;
+            spectrum->fall[index] = 0.0f;
         }
+        spectrum->previous[index] = band;
+
+        band = spectrum->memory[index] * SMP_CAVA_NOISE_REDUCTION / (float)integral_mod + band;
+        spectrum->memory[index] = band;
+
         if (band < 0.0f) {
             band = 0.0f;
         } else if (band > 1.0f) {

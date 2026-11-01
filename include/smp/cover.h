@@ -40,6 +40,14 @@ SmpStatus smp_image_resize_box(const SmpImage *source, SmpImage *out_image, int 
 SmpStatus smp_cover_find(const char *directory, char *out_path, size_t out_size);
 
 /*
+ * Scales the image so that it covers `width` x `height` completely, cropping
+ * the parts that do not fit (like CSS `object-fit: cover`). Unlike
+ * smp_image_resize_box() this also upscales, so the cover always fills its
+ * panel without empty borders.
+ */
+SmpStatus smp_image_fill_box(const SmpImage *source, SmpImage *out_image, int width, int height);
+
+/*
  * Rasterises the image into an ASCII-art grid of `columns` x `rows`
  * characters. Every cell gets the average colour of the source area it
  * covers, which is mapped to a luminance ramp. Each row is NUL terminated and
