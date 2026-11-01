@@ -24,7 +24,21 @@ jobs:
       - name: Build
         run: |
           set -o pipefail
-          cmake --build build 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+          cmake --build build 2>&1 | tee build.log
+
+      - name: Report build failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          message=$(grep -m1 -E 'error:|Error ' build.log | tr -d '\r' | cut -c1-120)
+          if [ -z "$message" ]; then message="build failed, see the log"; fi
+          jq -n --arg d "$message" '{state:"failure",context:"linux-build",description:$d}' \
+            | curl -s -X POST \
+                -H "Authorization: token $GH_TOKEN" \
+                -H "Accept: application/vnd.github+json" \
+                --data @- \
+                "https://api.github.com/repos/${{ github.repository }}/statuses/${{ github.sha }}" > /dev/null
 
       - name: Test
         run: ctest --test-dir build --output-on-failure
