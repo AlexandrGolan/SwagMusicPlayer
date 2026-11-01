@@ -62,10 +62,11 @@ cmake --build --preset windows-mingw
 
 ## Install on Windows
 
-Run `SMP-Setup-<version>.exe` and follow the wizard. The installer works per
-user without administrator rights, adds a Start menu entry and, if you keep the
-checkbox, a desktop shortcut, and registers an uninstaller in "Apps &
-features".
+The repository ships **`smpinstall.exe`** in the root. Download the project,
+open the folder and run that file — no terminal involved. The wizard installs
+the player for the current user without administrator rights, adds a Start
+menu entry and, if you keep the checkbox, a desktop shortcut, and registers an
+uninstaller in "Apps & features".
 
 The shortcut starts the player, which opens a standard Explorer window — pick
 the folder with your music and it starts playing.

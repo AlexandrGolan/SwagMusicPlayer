@@ -1,4 +1,4 @@
-﻿# Build trees
+# Build trees
 build/
 .build/
 cmake-build-*/
@@ -38,3 +38,6 @@ music/
 # Installer output
 dist/
 installer/stage/
+
+# The installer shipped in the repository root is tracked on purpose.
+!smpinstall.exe

@@ -8,6 +8,7 @@
 *.bmp binary
 *.gif binary
 *.ico binary
+*.exe binary
 
 *.bat text eol=crlf
 *.cmd text eol=crlf

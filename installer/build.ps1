@@ -2,7 +2,8 @@
 #
 #   1. builds the Release binary with CMake,
 #   2. stages the files the installer needs,
-#   3. runs Inno Setup and writes dist\SMP-Setup-<version>.exe.
+#   3. runs Inno Setup, writes dist\SMP-Setup-<version>.exe and refreshes the
+#      smpinstall.exe copy that ships in the repository root.
 #
 # Requires Inno Setup 6 (ISCC.exe). Install it with:
 #   winget install --id JRSoftware.InnoSetup -e
@@ -43,6 +44,12 @@ try {
 
     & $Iscc (Join-Path $installerDir 'smp.iss')
     if ($LASTEXITCODE -ne 0) { throw 'ISCC failed' }
+
+    # The download-and-run copy that lives in the repository root.
+    $built = Get-ChildItem (Join-Path $root 'dist') -Filter 'SMP-Setup-*.exe' |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -First 1
+    Copy-Item $built.FullName (Join-Path $root 'smpinstall.exe') -Force
 }
 finally {
     Pop-Location
@@ -53,3 +60,4 @@ $setup = Get-ChildItem (Join-Path $root 'dist') -Filter 'SMP-Setup-*.exe' |
     Select-Object -First 1
 Write-Host ''
 Write-Host "installer: $($setup.FullName) ($([math]::Round($setup.Length / 1MB, 2)) MB)"
+Write-Host "root copy: $(Join-Path $root 'smpinstall.exe')"
