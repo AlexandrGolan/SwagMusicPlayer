@@ -14,8 +14,7 @@
 #include "smp/fft.h"
 #include "smp/thread.h"
 
-#define SMP_SPECTRUM_MIN_HZ 40.0
-#define SMP_SPECTRUM_MAX_HZ 16000.0
+
 #define SMP_SPECTRUM_DB_FLOOR (-70.0)
 /*
  * Bar dynamics follow cava (cavacore.c): the bar jumps straight to a new peak,
@@ -81,7 +80,7 @@ static size_t spectrum_bin_for(const SmpSpectrum *spectrum, double frequency)
 }
 
 /*
- * Splits the 40 Hz..16 kHz range into logarithmic bands. Frequencies above
+ * Splits the configured range into logarithmic bands. Frequencies above
  * Nyquist collapse onto the Nyquist bin, which matches the permission for
  * empty bands to reuse their nearest bin.
  */

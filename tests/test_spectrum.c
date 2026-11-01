@@ -14,9 +14,10 @@
 #define TEST_RATE 48000
 #define TEST_WINDOW 1024
 #define TEST_PI 3.14159265358979323846
-/* The bands are log spaced from 40 Hz to 16 kHz; derive the index instead of hardcoding it. */
+/* The bands are log spaced over the configured range; derive the index instead of hardcoding it. */
 #define TEST_440_BAND                                                                          \
-    ((size_t)((log(440.0 / 40.0) / log(16000.0 / 40.0)) * (double)SMP_SPECTRUM_BANDS))
+    ((size_t)((log(440.0 / SMP_SPECTRUM_MIN_HZ) / log(SMP_SPECTRUM_MAX_HZ / SMP_SPECTRUM_MIN_HZ)) \
+              * (double)SMP_SPECTRUM_BANDS))
 #define TEST_FAR_BAND (SMP_SPECTRUM_BANDS - 1)
 
 void suite_spectrum(void);

@@ -1,4 +1,4 @@
-﻿/*
+/*
  * SMP - Swag Music Player
  * Embedded metadata: ID3v2, ID3v1 and RIFF INFO chunks.
  *
@@ -102,10 +102,10 @@ static uint32_t cp1251_to_unicode(uint8_t byte)
         return cp1251_upper[byte - 0xc0u];
     }
     if (byte == 0xa8u) {
-        return 0x0401; /* Р Рѓ */
+        return 0x0401; /* РЃ */
     }
     if (byte == 0xb8u) {
-        return 0x0451; /* РЎвЂ */
+        return 0x0451; /* lowercase yo */
     }
     return 0xfffdu;
 }

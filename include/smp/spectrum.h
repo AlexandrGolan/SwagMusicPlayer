@@ -10,7 +10,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define SMP_SPECTRUM_BANDS 16
+/* Seven bands from 55 Hz to 3348 Hz, the range that matters for music. */
+#define SMP_SPECTRUM_BANDS 7
+#define SMP_SPECTRUM_MIN_HZ 55.0
+#define SMP_SPECTRUM_MAX_HZ 3348.0
 
 typedef struct SmpSpectrum SmpSpectrum;
 

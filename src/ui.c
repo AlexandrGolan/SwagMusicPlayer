@@ -1,4 +1,4 @@
-﻿/*
+/*
  * SMP - Swag Music Player
  * Terminal user interface.
  *
@@ -19,10 +19,15 @@
 /* Active palette; pure white unless a configuration file overrides it. */
 static SmpUiTheme g_theme;
 
-#define SEPARATOR "\xe2\x94\x80"  /* РІвЂќР‚ */
-#define BAR_FULL "\xe2\x96\x88"   /* РІвЂ“в‚¬ */
-#define BAR_EMPTY "\xe2\x96\x91"  /* РІвЂ“вЂ */
-#define MARKER "\xe2\x96\xb6"     /* РІвЂ“В¶ */
+#define SEPARATOR "\xe2\x94\x80"  /* horizontal rule */
+#define VERTICAL "\xe2\x94\x82"   /* vertical rule */
+#define JUNCTION_TOP "\xe2\x94\xac"     /* top tee */
+#define JUNCTION_LEFT "\xe2\x94\x9c"    /* left tee */
+#define JUNCTION_RIGHT "\xe2\x94\xa4"   /* right tee */
+#define JUNCTION_BOTTOM "\xe2\x94\xb4"  /* bottom tee */
+#define BAR_FULL "\xe2\x96\x88"   /* full block */
+#define BAR_EMPTY "\xe2\x96\x91"  /* light shade */
+#define MARKER "\xe2\x96\xb6"     /* right pointing triangle */
 
 void smp_ui_theme_defaults(SmpUiTheme *theme)
 {
@@ -339,12 +344,15 @@ static void draw_cover_ascii(SmpUiState *state,
 
 }
 
+static const uint8_t *image_pixel(const SmpImage *image, int x, int y)
+{
+    return image->pixels + ((size_t)y * (size_t)image->width + (size_t)x) * 4u;
+}
+
 static void draw_cover(SmpUiState *state, SmpFrame *frame, int x, int y, int width, int height)
 {
     int cells_x;
     int cells_y;
-    int offset_x;
-    int offset_y;
     int row;
 
     ensure_cover(state);
@@ -373,54 +381,40 @@ static void draw_cover(SmpUiState *state, SmpFrame *frame, int x, int y, int wid
     /* Fill the whole panel: the image is cropped, never letterboxed. */
     cells_x = width;
     cells_y = height;
-    if (cells_x < 2 || cells_y < 1) {
+    if (cells_x < 1 || cells_y < 1) {
         return;
     }
 
-    {
-        if (state->cover_scaled_width != cells_x || state->cover_scaled_height != cells_y * 2) {
-            smp_image_free(&state->cover_scaled);
-            if (smp_image_fill_box(&state->cover, &state->cover_scaled, cells_x, cells_y * 2)
-                != SMP_OK)
-            {
-                state->cover_scaled_width = 0;
-                state->cover_scaled_height = 0;
-                return;
-            }
-            state->cover_scaled_width = cells_x;
-            state->cover_scaled_height = cells_y * 2;
+    if (state->cover_scaled_width != cells_x || state->cover_scaled_height != cells_y * 2) {
+        smp_image_free(&state->cover_scaled);
+        if (smp_image_fill_box(&state->cover, &state->cover_scaled, cells_x, cells_y * 2) != SMP_OK) {
+            state->cover_scaled_width = 0;
+            state->cover_scaled_height = 0;
+            return;
         }
+        state->cover_scaled_width = cells_x;
+        state->cover_scaled_height = cells_y * 2;
+    }
 
-        offset_x = x;
-        offset_y = y;
+    for (row = 0; row < cells_y; row++) {
+        int column;
 
-        for (row = 0; row < cells_y; row++) {
-            int column;
+        for (column = 0; column < cells_x; column++) {
+            const uint8_t *top = image_pixel(&state->cover_scaled, column, row * 2);
+            const uint8_t *bottom = image_pixel(&state->cover_scaled, column, row * 2 + 1);
 
-            for (column = 0; column < cells_x; column++) {
-                const uint8_t *top = state->cover_scaled.pixels
-                                     + (((size_t)(row * 2) * (size_t)state->cover_scaled.width)
-                                        + (size_t)column)
-                                           * 4u;
-                const uint8_t *bottom
-                    = state->cover_scaled.pixels
-                      + (((size_t)(row * 2 + 1) * (size_t)state->cover_scaled.width) + (size_t)column)
-                            * 4u;
-
-                smp_frame_put_cell(frame,
-                                   offset_x + column,
-                                   offset_y + row,
-                                   0x2580u, /* РІвЂ“Р‚ upper half block */
-                                   top[0],
-                                   top[1],
-                                   top[2],
-                                   true,
-                                   bottom[0],
-                                   bottom[1],
-                                   bottom[2]);
-            }
+            (void)smp_frame_put_cell(frame,
+                                     x + column,
+                                     y + row,
+                                     0x2580u, /* upper half block */
+                                     top[0],
+                                     top[1],
+                                     top[2],
+                                     true,
+                                     bottom[0],
+                                     bottom[1],
+                                     bottom[2]);
         }
-
     }
 }
 
@@ -831,6 +825,10 @@ void smp_ui_render(SmpUiState *state,
     int right_x;
     int right_width;
     int playlist_y;
+    int panel_top;
+    int panel_bottom;
+    int spectrum_height;
+    int cover_bottom;
 
     if (state == NULL || frame == NULL || playlist == NULL || player == NULL || frame->cells == NULL) {
         return;
@@ -861,8 +859,8 @@ void smp_ui_render(SmpUiState *state,
         left_width = frame->width - 34;
     }
 
-    right_x = left_width + 2;
-    right_width = frame->width - right_x - 1;
+    right_x = left_width + 1;
+    right_width = frame->width - right_x;
 
     /*
      * While the player is idle the panel describes the highlighted track,
@@ -886,54 +884,47 @@ void smp_ui_render(SmpUiState *state,
         draw_header(frame, &inactive);
         draw_separator(frame, 1, 0, frame->width);
 
-        /* Left panel: the cover fills the whole panel, no letterboxing. */
+        /* Left panel: the cover fills its half, the visualiser sits right below. */
         {
-            int panel_top = 3;
-            int panel_height = frame->height - 4 - panel_top + 1;
+            panel_top = 2;
+            panel_bottom = frame->height - 4;
+            spectrum_height = 0;
+            cover_bottom = panel_bottom;
 
-            draw_cover(state, frame, 1, panel_top, left_width - 2, panel_height);
+            if (state->spectrum != NULL && state->theme.show_spectrum
+                && panel_bottom - panel_top > 12)
+            {
+                spectrum_height = SMP_MIN(5, (panel_bottom - panel_top) / 4);
+                cover_bottom = panel_bottom - spectrum_height - 1;
+            }
+
+            draw_cover(state, frame, 0, panel_top, left_width, cover_bottom - panel_top + 1);
+
+            if (spectrum_height > 0) {
+                draw_separator(frame, cover_bottom + 1, 0, left_width);
+                draw_spectrum(state, frame, 0, cover_bottom + 2, left_width, spectrum_height);
+            }
         }
-        draw_separator(frame, 2, 0, frame->width);
 
-        /* Right panel: track info and playlist. */
+        /* Right panel: track info, progress and playlist. */
         draw_now_playing(frame,
                          right_x,
-                         3,
+                         2,
                          right_width,
                          &inactive,
                          player->state == SMP_PLAYER_STOPPED ? "selected" : "now playing");
-        draw_progress(frame, right_x, 7, right_width, &inactive);
-        draw_separator(frame, 8, right_x, right_width);
+        draw_progress(frame, right_x, 6, right_width, &inactive);
+        draw_separator(frame, 7, right_x, right_width);
     }
 
-    playlist_y = 9;
-
-    /* The visualiser lives in the bottom right corner of the right panel. */
+    playlist_y = 8;
     {
-        int spectrum_height = 0;
-        int playlist_bottom = frame->height - 4;
-        int item_rows;
+        int item_rows = (frame->height - 4) - (playlist_y + 1) + 1;
 
-        if (state->spectrum != NULL && state->theme.show_spectrum && playlist_bottom - playlist_y > 8) {
-            spectrum_height = SMP_MIN(5, (playlist_bottom - playlist_y) / 3);
-            playlist_bottom -= spectrum_height + 1;
-        }
-
-        item_rows = playlist_bottom - playlist_y;
         if (item_rows < 1) {
             item_rows = 1;
         }
         draw_playlist(state, frame, right_x, playlist_y, right_width, item_rows, playlist, player);
-
-        if (spectrum_height > 0) {
-            draw_separator(frame, frame->height - 4 - spectrum_height, right_x, right_width);
-            draw_spectrum(state,
-                          frame,
-                          right_x,
-                          frame->height - 4 - spectrum_height + 1,
-                          right_width,
-                          spectrum_height);
-        }
     }
 
     /* Vertical separator between the panels. */
@@ -941,12 +932,24 @@ void smp_ui_render(SmpUiState *state,
         int row;
 
         smp_frame_set_style(frame, smp_style_dim(g_theme.dim.r, g_theme.dim.g, g_theme.dim.b));
-        for (row = 2; row < frame->height - 2; row++) {
-            (void)smp_frame_put(frame, left_width, row, "\xe2\x94\x82");
+        for (row = 2; row <= frame->height - 4; row++) {
+            (void)smp_frame_put(frame, left_width, row, VERTICAL);
         }
     }
 
     draw_footer(state, frame, player, backend, now_ms);
+
+    /*
+     * Junction glyphs: without them a one cell gap shows up between the
+     * horizontal rules and the vertical divider.
+     */
+    smp_frame_set_style(frame, smp_style_dim(g_theme.dim.r, g_theme.dim.g, g_theme.dim.b));
+    (void)smp_frame_put(frame, left_width, 1, JUNCTION_TOP);
+    (void)smp_frame_put(frame, left_width, 7, JUNCTION_LEFT);
+    (void)smp_frame_put(frame, left_width, frame->height - 3, JUNCTION_BOTTOM);
+    if (spectrum_height > 0) {
+        (void)smp_frame_put(frame, left_width, cover_bottom + 1, JUNCTION_RIGHT);
+    }
 
     if (state->show_help) {
         draw_help(frame);
