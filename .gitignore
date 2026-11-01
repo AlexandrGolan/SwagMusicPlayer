@@ -1,4 +1,4 @@
-# Build trees
+﻿# Build trees
 build/
 .build/
 cmake-build-*/
@@ -23,10 +23,6 @@ compile_commands.json
 .vscode/
 .idea/
 
-# Nix
-result
-result-*
-.direnv/
 
 # Test artefacts (the suite writes temporary files into the build tree)
 smp_test_*
