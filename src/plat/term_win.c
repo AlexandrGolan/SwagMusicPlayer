@@ -1,4 +1,4 @@
-﻿/*
+/*
  * SMP - Swag Music Player
  * Terminal handling for Windows (VT sequences + console input).
  *
@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <windows.h>
+#include <shobjidl.h>
 
 #include "smp/common.h"
 #include "smp/term.h"
@@ -312,3 +313,61 @@ bool smp_term_poll(SmpKey *key, int timeout_ms)
 }
 
 #endif /* _WIN32 */
+
+/*
+ * Native folder chooser. The dialog is shown before the terminal switches to the
+ * alternate screen, so the user sees a normal Explorer window.
+ */
+bool smp_term_pick_directory(char *out, size_t size)
+{
+    IFileOpenDialog *dialog = NULL;
+    IShellItem *item = NULL;
+    PWSTR selected = NULL;
+    bool com_ready = false;
+    bool picked = false;
+    HRESULT hr;
+
+    if (out == NULL || size < 2u) {
+        return false;
+    }
+    out[0] = '\0';
+
+    hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+    if (SUCCEEDED(hr)) {
+        com_ready = true;
+    } else if (hr != RPC_E_CHANGED_MODE) {
+        return false;
+    }
+
+    hr = CoCreateInstance(&CLSID_FileOpenDialog, NULL, CLSCTX_INPROC_SERVER,
+                          &IID_IFileOpenDialog, (void **)&dialog);
+    if (SUCCEEDED(hr)) {
+        FILEOPENDIALOGOPTIONS options = 0;
+
+        (void)dialog->lpVtbl->GetOptions(dialog, &options);
+        (void)dialog->lpVtbl->SetOptions(dialog,
+                                         options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM
+                                             | FOS_PATHMUSTEXIST);
+        (void)dialog->lpVtbl->SetTitle(dialog, L"Choose the folder with your music");
+
+        if (SUCCEEDED(dialog->lpVtbl->Show(dialog, NULL))
+            && SUCCEEDED(dialog->lpVtbl->GetResult(dialog, &item)))
+        {
+            if (SUCCEEDED(item->lpVtbl->GetDisplayName(item, SIGDN_FILESYSPATH, &selected))
+                && selected != NULL)
+            {
+                if (WideCharToMultiByte(CP_UTF8, 0, selected, -1, out, (int)size, NULL, NULL) > 0) {
+                    picked = true;
+                }
+                CoTaskMemFree(selected);
+            }
+            (void)item->lpVtbl->Release(item);
+        }
+        (void)dialog->lpVtbl->Release(dialog);
+    }
+
+    if (com_ready) {
+        CoUninitialize();
+    }
+    return picked;
+}

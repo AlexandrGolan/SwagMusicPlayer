@@ -57,4 +57,11 @@ void smp_term_flush(void);
 /* Returns true once after the terminal was resized. */
 bool smp_term_take_resize(void);
 
+/*
+ * Shows the native folder chooser before the terminal takes over and stores the
+ * selected path in `out`. Returns false when the user cancels, when `out` is
+ * too small, or when the platform has no such dialog (POSIX).
+ */
+bool smp_term_pick_directory(char *out, size_t size);
+
 #endif /* SMP_TERM_H */

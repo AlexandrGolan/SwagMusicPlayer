@@ -1,4 +1,4 @@
-﻿/*
+/*
  * SMP - Swag Music Player
  * Terminal handling for POSIX platforms.
  *
@@ -447,3 +447,15 @@ bool smp_term_poll(SmpKey *key, int timeout_ms)
 }
 
 #endif /* !_WIN32 */
+
+/*
+ * POSIX has no built-in folder chooser; the caller falls back to the usage
+ * message and the user passes the directory as an argument.
+ */
+bool smp_term_pick_directory(char *out, size_t size)
+{
+    if (out != NULL && size > 0u) {
+        out[0] = '\0';
+    }
+    return false;
+}

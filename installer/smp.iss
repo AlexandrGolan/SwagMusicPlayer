@@ -51,39 +51,12 @@ Source: "stage\README.md"; DestDir: "{app}"; Flags: ignoreversion isreadme
 Source: "stage\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\{#AppName}"; Filename: "{app}\smp.cmd"; WorkingDir: "{code:MusicFolder}"; IconFilename: "{app}\smp.ico"
+Name: "{group}\{#AppName}"; Filename: "{app}\smp.cmd"; WorkingDir: "{%USERPROFILE}"; IconFilename: "{app}\smp.ico"
 Name: "{group}\{cm:UninstallProgram,{#AppName}}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#AppName}"; Filename: "{app}\smp.cmd"; WorkingDir: "{code:MusicFolder}"; IconFilename: "{app}\smp.ico"; Tasks: desktopicon
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\smp.cmd"; WorkingDir: "{%USERPROFILE}"; IconFilename: "{app}\smp.ico"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\smp.cmd"; Description: "{cm:LaunchProgram,{#StringChange(AppName, '&', '&&')}}"; WorkingDir: "{code:MusicFolder}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\smp.cmd"; Description: "{cm:LaunchProgram,{#StringChange(AppName, '&', '&&')}}"; WorkingDir: "{%USERPROFILE}"; Flags: nowait postinstall skipifsilent
 
 [Code]
-{ The Music known folder can be relocated, so ask the shell for it and only
-  fall back to Documents when nothing usable is found. }
-function MusicFolder(Param: String): String;
-var
-  Path: String;
-begin
-  if RegQueryStringValue(HKCU,
-       'Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders',
-       'My Music', Path) and DirExists(Path) then
-  begin
-    Result := Path;
-    exit;
-  end;
-
-  Path := ExpandConstant('{userdocs}\Music');
-  if DirExists(Path) then
-  begin
-    Result := Path;
-    exit;
-  end;
-
-  Result := ExpandConstant('{userdocs}');
-end;
-
-procedure InitializeWizard();
-begin
-  { Nothing to customise: the default wizard pages are enough. }
-end;
+{ The player asks for the music folder itself, so the wizard needs no code. }

@@ -65,7 +65,12 @@ cmake --build --preset windows-mingw
 Run `SMP-Setup-<version>.exe` and follow the wizard. The installer works per
 user without administrator rights, adds a Start menu entry and, if you keep the
 checkbox, a desktop shortcut, and registers an uninstaller in "Apps &
-features". The shortcut opens the player on your Music folder.
+features".
+
+The shortcut starts the player, which opens a standard Explorer window — pick
+the folder with your music and it starts playing.
+
+![The folder chooser](docs/picker.png)
 
 ![The installer](docs/installer.png)
 
@@ -80,6 +85,7 @@ powershell -File installer\build.ps1
 
 ```bash
 smp ~/Music/Album
+smp                                 # Windows: opens the folder chooser
 smp --audio null ~/Music/Album     # silent backend
 smp --list-devices
 smp --init-config

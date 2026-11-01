@@ -1,4 +1,4 @@
-﻿/*
+/*
  * SMP - Swag Music Player
  * Entry point and application loop.
  *
@@ -43,6 +43,8 @@ static void print_usage(const char *program)
     printf("Usage: %s [options] <music-directory>\n\n", program);
     printf("Options:\n");
     printf("  -d, --directory <path>  directory with WAV/MP3 files (also positional)\n");
+    printf("                          on Windows, running without a directory opens a\n");
+    printf("                          folder chooser\n");
     printf("      --audio <backend>   audio backend: auto, wasapi, alsa, null\n");
     printf("      --config <path>     read colours and options from this file\n");
     printf("      --no-config         ignore the configuration file\n");
@@ -158,25 +160,25 @@ static uint32_t normalize_hotkey(uint32_t character)
     switch (character) {
     case 0x0439:
     case 0x0419:
-        return 'q'; /* Р№ */
+        return 'q'; /* Р В Р’В Р вЂ™Р’В Р В Р вЂ Р Р†Р вЂљРЎвЂєР Р†Р вЂљРІР‚Сљ */
     case 0x0444:
     case 0x0424:
-        return 'a'; /* С„ */
+        return 'a'; /* Р В Р’В Р В Р вЂ№Р В Р вЂ Р В РІР‚С™Р РЋРІР‚С” */
     case 0x043c:
     case 0x041c:
-        return 'v'; /* Рј */
+        return 'v'; /* Р В Р’В Р вЂ™Р’В Р В Р Р‹Р вЂ™Р’В */
     case 0x0442:
     case 0x0422:
-        return 'n'; /* С‚ */
+        return 'n'; /* Р В Р’В Р В Р вЂ№Р В Р вЂ Р В РІР‚С™Р РЋРІвЂћСћ */
     case 0x0437:
     case 0x0417:
-        return 'p'; /* Р· */
+        return 'p'; /* Р В Р’В Р вЂ™Р’В Р В РІР‚в„ўР вЂ™Р’В· */
     case 0x043a:
     case 0x041a:
-        return 'r'; /* Рє */
+        return 'r'; /* Р В Р’В Р вЂ™Р’В Р В Р Р‹Р Р†Р вЂљРЎСљ */
     case 0x0440:
     case 0x0420:
-        return 'h'; /* СЂ */
+        return 'h'; /* Р В Р’В Р В Р вЂ№Р В Р’В Р Р†Р вЂљРЎв„ў */
     default:
         return character;
     }
@@ -326,7 +328,7 @@ static void render_frame(SmpFrame *frame,
     smp_frame_render(frame, output);
 }
 
-static int run_application(const Options *options)
+static int run_application(const Options *options, const char *program)
 {
     Playlist playlist;
     SmpAudioDevice *device = NULL;
@@ -345,6 +347,7 @@ static int run_application(const Options *options)
     int height = 0;
     uint64_t next_frame = 0;
 
+    const char *directory = options->directory;
     SmpConfig config;
     SmpUiTheme theme;
     SmpStatus config_status;
@@ -380,9 +383,26 @@ static int run_application(const Options *options)
     sb_init(&output);
     sb_init(&previous);
 
-    status = smp_playlist_load(&playlist, options->directory);
+    /*
+     * Started from the Start menu there is no directory argument: ask the shell
+     * for one before the terminal switches to the alternate screen.
+     */
+    if (directory == NULL) {
+        static char picked[SMP_PATH_MAX];
+
+        if (smp_term_pick_directory(picked, sizeof(picked))) {
+            directory = picked;
+        } else {
+            fprintf(stderr, "smp: no music directory given\n\n");
+            print_usage(program);
+            exit_code = 2;
+            goto cleanup;
+        }
+    }
+
+    status = smp_playlist_load(&playlist, directory);
     if (status == SMP_ERR_NOT_FOUND) {
-        fprintf(stderr, "smp: directory not found: %s\n", options->directory);
+        fprintf(stderr, "smp: directory not found: %s\n", directory);
         exit_code = 1;
         goto cleanup;
     }
@@ -394,7 +414,7 @@ static int run_application(const Options *options)
     if (playlist.count == 0) {
         fprintf(stderr,
                 "smp: no WAV, MP3, FLAC or OGG files found in %s\n",
-                options->directory);
+                directory);
         exit_code = 1;
         goto cleanup;
     }
@@ -422,7 +442,7 @@ static int run_application(const Options *options)
     smp_player_set_spectrum(player, spectrum);
     smp_player_set_volume(player, config.volume);
 
-    smp_ui_set_directory(&ui, options->directory);
+    smp_ui_set_directory(&ui, directory);
     smp_ui_set_message(&ui, "press space or enter to start", smp_now_ms());
 
     if (options->render_once) {
@@ -600,14 +620,14 @@ static int smp_main_entry(int argc, char **argv)
         free(path);
         return write_status == SMP_OK ? 0 : 1;
     }
-    if (options.directory == NULL) {
-        fprintf(stderr, "smp: no music directory given\n\n");
-        print_usage(argv[0]);
-        return 2;
-    }
+    /*
+     * Without a directory, run_application() asks the shell for one before it
+     * opens the player and falls back to the usage message when the platform
+     * has no folder chooser.
+     */
 
 
-    return run_application(&options);
+    return run_application(&options, argv[0]);
 }
 
 #ifdef _WIN32
