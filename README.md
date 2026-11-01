@@ -60,6 +60,20 @@ cmake --preset windows-mingw
 cmake --build --preset windows-mingw
 ```
 
+## Install on Windows
+
+Run `SMP-Setup-<version>.exe` and follow the wizard. The installer works per
+user without administrator rights, adds a Start menu entry and, if you keep the
+checkbox, a desktop shortcut, and registers an uninstaller in "Apps &
+features". The shortcut opens the player on your Music folder.
+
+The setup is built from `installer/`:
+
+```powershell
+winget install --id JRSoftware.InnoSetup -e
+powershell -File installer\build.ps1
+```
+
 ## Usage
 
 ```bash

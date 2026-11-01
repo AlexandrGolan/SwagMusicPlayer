@@ -34,3 +34,7 @@ music/
 # Sanitizer build trees
 .ubsan/
 .asan/
+
+# Installer output
+dist/
+installer/stage/
