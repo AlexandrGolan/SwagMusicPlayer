@@ -181,7 +181,8 @@ static void test_ascii_art(void)
 {
     uint8_t pixels[2 * 2 * 4];
     SmpImage image;
-    char out[16];
+    /* Two rows of two characters plus a terminator per row: stride 3. */
+    char out[3 * 2];
     int index;
 
     smp_test_begin("ascii art luminance ramp");
@@ -198,7 +199,7 @@ static void test_ascii_art(void)
     image.height = 2;
     image.pixels = pixels;
 
-    SMP_CHECK(smp_image_to_ascii(&image, 2, 2, out, sizeof(out)));
+    SMP_CHECK(smp_image_to_ascii(&image, 2, 2, out, 3));
     SMP_CHECK_STR(out, "  ");
 
     for (index = 0; index < 2 * 2 * 4; index += 4) {
@@ -206,7 +207,7 @@ static void test_ascii_art(void)
         pixels[index + 1] = 255;
         pixels[index + 2] = 255;
     }
-    SMP_CHECK(smp_image_to_ascii(&image, 2, 2, out, sizeof(out)));
+    SMP_CHECK(smp_image_to_ascii(&image, 2, 2, out, 3));
     SMP_CHECK_STR(out, "@@");
 
     /* Left column black, right column white (two pixels per column). */
@@ -216,11 +217,11 @@ static void test_ascii_art(void)
     pixels[8] = 0;
     pixels[9] = 0;
     pixels[10] = 0;
-    SMP_CHECK(smp_image_to_ascii(&image, 2, 1, out, sizeof(out)));
+    SMP_CHECK(smp_image_to_ascii(&image, 2, 1, out, 3));
     SMP_CHECK_STR(out, " @");
 
-    SMP_CHECK(!smp_image_to_ascii(&image, 4, 2, out, sizeof(out)));
-    SMP_CHECK(!smp_image_to_ascii(&image, 2, 2, out, 2));
+    SMP_CHECK(!smp_image_to_ascii(&image, 4, 2, out, 3));
+    SMP_CHECK(!smp_image_to_ascii(&image, 2, 2, out, 2)); /* stride too small */
     SMP_CHECK_STR(smp_ascii_ramp(), " .:-=+*#%@");
     smp_test_end();
 }

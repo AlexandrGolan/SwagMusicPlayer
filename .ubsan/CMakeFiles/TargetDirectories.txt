@@ -1,0 +1,11 @@
+C:/Users/golan/Desktop/SwagMusicPlayer/.ubsan/CMakeFiles/smp_vendor.dir
+C:/Users/golan/Desktop/SwagMusicPlayer/.ubsan/CMakeFiles/smp_core.dir
+C:/Users/golan/Desktop/SwagMusicPlayer/.ubsan/CMakeFiles/smp.dir
+C:/Users/golan/Desktop/SwagMusicPlayer/.ubsan/CMakeFiles/smp_tests.dir
+C:/Users/golan/Desktop/SwagMusicPlayer/.ubsan/CMakeFiles/test.dir
+C:/Users/golan/Desktop/SwagMusicPlayer/.ubsan/CMakeFiles/edit_cache.dir
+C:/Users/golan/Desktop/SwagMusicPlayer/.ubsan/CMakeFiles/rebuild_cache.dir
+C:/Users/golan/Desktop/SwagMusicPlayer/.ubsan/CMakeFiles/list_install_components.dir
+C:/Users/golan/Desktop/SwagMusicPlayer/.ubsan/CMakeFiles/install.dir
+C:/Users/golan/Desktop/SwagMusicPlayer/.ubsan/CMakeFiles/install/local.dir
+C:/Users/golan/Desktop/SwagMusicPlayer/.ubsan/CMakeFiles/install/strip.dir
