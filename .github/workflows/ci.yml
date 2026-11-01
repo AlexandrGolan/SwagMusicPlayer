@@ -1,4 +1,4 @@
-name: CI
+﻿name: CI
 
 on:
   push:
@@ -22,7 +22,9 @@ jobs:
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DSMP_WERROR=ON
 
       - name: Build
-        run: cmake --build build
+        run: |
+          set -o pipefail
+          cmake --build build 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Test
         run: ctest --test-dir build --output-on-failure
