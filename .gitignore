@@ -34,3 +34,7 @@ test_tmp/
 
 # Local music
 music/
+
+# Sanitizer build trees
+.ubsan/
+.asan/
