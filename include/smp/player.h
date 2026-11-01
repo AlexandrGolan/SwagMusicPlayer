@@ -32,6 +32,7 @@ typedef struct {
     char title[192];
     char artist[192];
     char album[192];
+    char format[8];
 } SmpPlayerSnapshot;
 
 typedef struct SmpPlayer SmpPlayer;

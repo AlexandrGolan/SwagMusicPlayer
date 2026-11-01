@@ -1,4 +1,4 @@
-﻿/*
+/*
  * SMP - Swag Music Player
  * Spectrum analyser: FFT bands, smoothing and peak markers.
  *
@@ -54,6 +54,9 @@ struct SmpSpectrum {
     float fall[SMP_SPECTRUM_BANDS];
     float memory[SMP_SPECTRUM_BANDS];
     float peak_value[SMP_SPECTRUM_BANDS];
+
+    /* Automatic gain: keeps the loudest band just below full scale. */
+    float auto_gain;
 };
 
 static bool spectrum_is_power_of_two(size_t value)
@@ -277,22 +280,56 @@ void smp_spectrum_update(SmpSpectrum *spectrum, float dt_seconds)
         integral_mod = pow(framerate_mod, 0.1);
     }
 
-    for (index = 0; index < SMP_SPECTRUM_BANDS; index++) {
-        size_t bin;
-        float magnitude = 0.0f;
-        float target;
-        float band;
-        float peak;
+    {
+        float targets[SMP_SPECTRUM_BANDS];
+        float maximum = 0.0f;
+        float gain;
 
-        for (bin = spectrum->band_low[index]; bin <= spectrum->band_high[index]; bin++) {
-            float candidate = spectrum_magnitude(spectrum, bin);
+        for (index = 0; index < SMP_SPECTRUM_BANDS; index++) {
+            size_t bin;
+            float magnitude = 0.0f;
 
-            if (candidate > magnitude) {
-                magnitude = candidate;
+            for (bin = spectrum->band_low[index]; bin <= spectrum->band_high[index]; bin++) {
+                float candidate = spectrum_magnitude(spectrum, bin);
+
+                if (candidate > magnitude) {
+                    magnitude = candidate;
+                }
+            }
+
+            targets[index] = spectrum_band_level(magnitude, spectrum->window_size);
+            if (targets[index] > maximum) {
+                maximum = targets[index];
             }
         }
 
-        target = spectrum_band_level(magnitude, spectrum->window_size);
+        /*
+         * Automatic gain control: follow the loudest band slowly and keep it
+         * around 90 % of the scale, so dense mixes do not pin every bar to
+         * the ceiling and quiet passages still show movement.
+         */
+        {
+            float delta = maximum - spectrum->auto_gain;
+
+            spectrum->auto_gain += delta * (delta > 0.0f ? 0.08f : 0.02f);
+            if (spectrum->auto_gain < 0.20f) {
+                spectrum->auto_gain = 0.20f;
+            }
+        }
+
+        gain = 0.90f / spectrum->auto_gain;
+        if (gain > 3.0f) {
+            gain = 3.0f;
+        }
+
+        for (index = 0; index < SMP_SPECTRUM_BANDS; index++) {
+            float target = targets[index] * gain;
+            float band = target;
+            float peak;
+
+            if (target > 1.0f) {
+                target = 1.0f;
+            }
 
         /*
          * cava: instant rise to the peak, accelerating gravity fall otherwise,
@@ -316,8 +353,21 @@ void smp_spectrum_update(SmpSpectrum *spectrum, float dt_seconds)
         }
         spectrum->previous[index] = band;
 
-        band = spectrum->memory[index] * SMP_CAVA_NOISE_REDUCTION / (float)integral_mod + band;
-        spectrum->memory[index] = band;
+        /*
+         * Unity gain low pass. cava adds the memory term without scaling,
+         * which boosts loud material until every bar sits at full scale; here
+         * the term is normalised so the bars keep moving instead of pinning
+         * themselves to the ceiling.
+         */
+        {
+            float alpha = SMP_CAVA_NOISE_REDUCTION / (float)integral_mod;
+
+            if (alpha > 0.85f) {
+                alpha = 0.85f;
+            }
+            band = spectrum->memory[index] * alpha + band * (1.0f - alpha);
+            spectrum->memory[index] = band;
+        }
 
         if (band < 0.0f) {
             band = 0.0f;
@@ -347,6 +397,7 @@ void smp_spectrum_update(SmpSpectrum *spectrum, float dt_seconds)
             peak = 1.0f;
         }
         spectrum->peaks[index] = peak;
+        }
     }
 
     smp_mutex_unlock(spectrum->mutex);

@@ -1,4 +1,4 @@
-﻿/*
+/*
  * SMP - Swag Music Player
  * Cell based render frame with ANSI output.
  *
@@ -52,6 +52,14 @@ SmpStyle smp_style_reverse(uint8_t r, uint8_t g, uint8_t b)
     SmpStyle style = smp_style_fg(r, g, b);
 
     style.flags |= SMP_CELL_REVERSE;
+    return style;
+}
+
+SmpStyle smp_style_italic(uint8_t r, uint8_t g, uint8_t b)
+{
+    SmpStyle style = smp_style_fg(r, g, b);
+
+    style.flags |= SMP_CELL_ITALIC;
     return style;
 }
 
@@ -326,6 +334,9 @@ void smp_frame_render(const SmpFrame *frame, StrBuf *out)
                 }
                 if ((flags & SMP_CELL_REVERSE) != 0u) {
                     (void)sb_append(out, "\x1b[7m");
+                }
+                if ((flags & SMP_CELL_ITALIC) != 0u) {
+                    (void)sb_append(out, "\x1b[3m");
                 }
                 if ((flags & SMP_CELL_HAS_FG) != 0u) {
                     append_color(out, true, cell->fg[0], cell->fg[1], cell->fg[2]);

@@ -25,6 +25,7 @@
 #define SMP_CELL_BOLD 0x04u
 #define SMP_CELL_DIM 0x08u
 #define SMP_CELL_REVERSE 0x10u
+#define SMP_CELL_ITALIC 0x20u
 
 typedef struct {
     uint32_t codepoint;
@@ -55,6 +56,7 @@ SmpStyle smp_style_fg(uint8_t r, uint8_t g, uint8_t b);
 SmpStyle smp_style_bold(uint8_t r, uint8_t g, uint8_t b);
 SmpStyle smp_style_dim(uint8_t r, uint8_t g, uint8_t b);
 SmpStyle smp_style_reverse(uint8_t r, uint8_t g, uint8_t b);
+SmpStyle smp_style_italic(uint8_t r, uint8_t g, uint8_t b);
 
 void smp_frame_init(SmpFrame *frame);
 void smp_frame_free(SmpFrame *frame);

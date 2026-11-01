@@ -18,6 +18,7 @@ typedef struct {
     char *artist;
     char *album;
     double duration; /* seconds, 0 when unknown */
+    char format[8];  /* "WAV", "MP3", "FLAC", "OGG" */
 } SmpTrack;
 
 typedef struct {

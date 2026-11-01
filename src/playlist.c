@@ -123,6 +123,25 @@ static bool append_track(Playlist *playlist, const char *path)
         return false;
     }
 
+    {
+        const char *extension = smp_path_extension(path);
+        size_t index = 0;
+
+        if (extension != NULL) {
+            extension++; /* skip the dot */
+        }
+        while (extension != NULL && extension[index] != '\0' && index < sizeof(track->format) - 1u) {
+            char letter = extension[index];
+
+            if (letter >= 'a' && letter <= 'z') {
+                letter = (char)(letter - 'a' + 'A');
+            }
+            track->format[index] = letter;
+            index++;
+        }
+        track->format[index] = '\0';
+    }
+
     if (smp_media_open(path, &media) == SMP_OK) {
         track->duration = smp_media_duration(media);
         smp_media_close(media);

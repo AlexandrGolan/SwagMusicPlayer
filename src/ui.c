@@ -557,7 +557,8 @@ static void draw_progress(SmpFrame *frame,
                           int width,
                           const SmpPlayerSnapshot *player)
 {
-    int bar_width = width - 22;
+    int label_width = player->format[0] != '\0' ? (int)strlen(player->format) + 6 : 0;
+    int bar_width = width - 22 - label_width;
     int filled = 0;
     int index;
     char elapsed[32];
@@ -606,6 +607,23 @@ static void draw_progress(SmpFrame *frame,
     (void)smp_frame_put(frame, x + bar_width + 3, y, elapsed);
     (void)smp_frame_put(frame, x + bar_width + 3 + (int)strlen(elapsed), y, " / ");
     (void)smp_frame_put(frame, x + bar_width + 6 + (int)strlen(elapsed), y, total);
+
+    /* Small italic note with the format of the file that is playing. */
+    {
+        char format[24];
+        int format_x;
+
+        snprintf(format,
+                 sizeof(format),
+                 "audio:%s",
+                 player->format[0] != '\0' ? player->format : "-");
+        format_x = x + width - (int)strlen(format) - 1;
+        if (format_x >= x + bar_width + 9 + (int)strlen(elapsed) + (int)strlen(total)) {
+            smp_frame_set_style(frame,
+                                smp_style_italic(g_theme.dim.r, g_theme.dim.g, g_theme.dim.b));
+            (void)smp_frame_put(frame, format_x, y, format);
+        }
+    }
 }
 
 /* Rough perceived brightness, used to detect an unreadable selection colour. */

@@ -1,4 +1,4 @@
-﻿/*
+/*
  * SMP - Swag Music Player
  * Playback engine: state machine and a single worker thread.
  *
@@ -586,6 +586,7 @@ void smp_player_snapshot(SmpPlayer *player, SmpPlayerSnapshot *snapshot)
         copy_text(snapshot->title, sizeof(snapshot->title), track->title);
         copy_text(snapshot->artist, sizeof(snapshot->artist), track->artist);
         copy_text(snapshot->album, sizeof(snapshot->album), track->album);
+        copy_text(snapshot->format, sizeof(snapshot->format), track->format);
     }
 
     unlock(player);
