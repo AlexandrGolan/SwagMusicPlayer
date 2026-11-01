@@ -228,6 +228,7 @@ SmpStatus smp_audio_write(SmpAudioDevice *device, const int16_t *frames, size_t 
 {
     size_t written = 0;
     size_t frame_bytes;
+    uint64_t stalled_since = 0;
 
     if (device == NULL || frames == NULL || frame_count == 0) {
         return SMP_ERR_INVALID_ARG;
@@ -244,10 +245,27 @@ SmpStatus smp_audio_write(SmpAudioDevice *device, const int16_t *frames, size_t 
             return SMP_ERR_AUDIO;
         }
         if (available == 0) {
+            uint64_t now;
+
             (void)ma_pcm_rb_commit_write(&device->ring, 0);
+
+            /*
+             * If the device disappears (unplugged DAC, stopped service) the
+             * callback never drains the ring buffer again. Give up instead of
+             * blocking the playback thread forever.
+             */
+            now = smp_now_ms();
+            if (stalled_since == 0) {
+                stalled_since = now;
+            } else if (now - stalled_since > 2000u) {
+                return SMP_ERR_AUDIO;
+            }
+
             smp_sleep_ms(2);
             continue;
         }
+
+        stalled_since = 0;
 
         memcpy(target, frames + written * (size_t)device->channels, (size_t)available * frame_bytes);
         (void)ma_pcm_rb_commit_write(&device->ring, available);

@@ -76,6 +76,10 @@ void smp_term_shutdown(void)
 {
     static const char *const cleanup = "\x1b[0m\x1b[?25h\x1b[?1049l\n";
 
+    if (!console_active) {
+        return;
+    }
+
     smp_term_write(cleanup, strlen(cleanup));
 
     if (console_active) {

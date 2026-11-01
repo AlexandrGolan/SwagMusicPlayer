@@ -112,7 +112,9 @@ void smp_term_shutdown(void)
         resize_pipe[1] = -1;
     }
 
-    (void)write(STDOUT_FILENO, cleanups, strlen(cleanups));
+    if (tty_available) {
+        (void)write(STDOUT_FILENO, cleanups, strlen(cleanups));
+    }
 }
 
 bool smp_term_is_tty(void)

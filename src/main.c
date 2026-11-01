@@ -254,6 +254,7 @@ static int run_application(const Options *options)
     SmpStatus status;
     static const char *const screen_on = "\x1b[?1049h\x1b[?25l\x1b[2J\x1b[H";
     bool running = true;
+    int exit_code = 0;
     int width = 0;
     int height = 0;
     uint64_t next_frame = 0;
@@ -266,14 +267,19 @@ static int run_application(const Options *options)
     status = smp_playlist_load(&playlist, options->directory);
     if (status == SMP_ERR_NOT_FOUND) {
         fprintf(stderr, "smp: directory not found: %s\n", options->directory);
+        exit_code = 1;
         goto cleanup;
     }
     if (status != SMP_OK) {
         fprintf(stderr, "smp: cannot load playlist: %s\n", smp_status_str(status));
+        exit_code = 1;
         goto cleanup;
     }
     if (playlist.count == 0) {
-        fprintf(stderr, "smp: no WAV or MP3 files found in %s\n", options->directory);
+        fprintf(stderr,
+                "smp: no WAV, MP3, FLAC or OGG files found in %s\n",
+                options->directory);
+        exit_code = 1;
         goto cleanup;
     }
 
@@ -283,12 +289,14 @@ static int run_application(const Options *options)
     status = smp_audio_open(options->backend, &device, &format);
     if (status != SMP_OK) {
         fprintf(stderr, "smp: cannot open audio output (%s)\n", smp_status_str(status));
+        exit_code = 1;
         goto cleanup;
     }
 
     player = smp_player_create(&playlist, device);
     if (player == NULL) {
         fprintf(stderr, "smp: cannot start the playback engine\n");
+        exit_code = 1;
         goto cleanup;
     }
 
@@ -302,6 +310,7 @@ static int run_application(const Options *options)
             height = 30;
         }
         if (!smp_frame_begin(&frame, width, height)) {
+            exit_code = 1;
             goto cleanup;
         }
         render_frame(&frame, &ui, &playlist, player, smp_audio_name(device), &output);
@@ -312,12 +321,14 @@ static int run_application(const Options *options)
 
     if (!smp_term_init()) {
         fprintf(stderr, "smp: standard input is not an interactive terminal\n");
+        exit_code = 1;
         goto cleanup;
     }
 
     smp_term_get_size(&width, &height);
     if (!smp_frame_begin(&frame, width, height)) {
         fprintf(stderr, "smp: cannot allocate the render buffer\n");
+        exit_code = 1;
         goto cleanup;
     }
 
@@ -391,7 +402,7 @@ cleanup:
     sb_free(&output);
     smp_ui_free(&ui);
     smp_playlist_free(&playlist);
-    return 0;
+    return exit_code;
 }
 
 static int smp_main_entry(int argc, char **argv)
